@@ -28,8 +28,8 @@ body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans
 <script type="module">
 // Loader. Finds the newest published commit of the tool and starts exactly that
 // version from a content delivery network, so every change to the repository
-// goes live by itself. If that version is slow to arrive or unavailable, the
-// copy stored with this page is used instead, so nobody waits.
+// goes live by itself. If that version is slow to arrive or unavailable, a
+// recent copy is used instead, so nobody waits.
 const REPO = 'samuelakosaonyejekwe/eueconomicstool';
 const CDN = 'https://cdn.jsdelivr.net/gh/' + REPO + '@';
 const KEY = 'esc.rev';
@@ -46,18 +46,22 @@ async function lookup() {
   } catch (e) { /* offline or over the hourly allowance */ }
 }
 (async function () {
-  const t0 = Date.now();
   if (!rev && !dev) await Promise.race([lookup(), wait(1500)]);
   window.__esc = { repo: REPO, cdn: CDN, key: KEY, dev: dev, rev: rev };
   const stored = new URL('./', document.baseURI).href;
-  const go = async function (base) { const boot = await import(base + 'js/boot.js'); await boot.run(base); };
-  if (dev || !rev) { go(stored); return; }
-  // Start the newest version; if it is not on screen within two seconds, start
-  // the stored copy as well. Whichever is ready first is used, the other stops.
-  let fell = false;
-  const fall = function () { if (!fell && !window.__escClaim) { fell = true; go(stored).catch(function () { /* nothing else to try */ }); } };
-  const timer = setTimeout(fall, Math.max(0, 2000 - (Date.now() - t0)));
-  go(CDN + rev.sha + '/').then(function () { clearTimeout(timer); }, function () { clearTimeout(timer); fall(); });
+  // Three copies, in order of freshness: the newest commit, the CDN's own recent
+  // copy of the main branch, and the copy stored with this page. Each later one
+  // is started only if nothing is on screen after a short wait, and the first
+  // copy that is fully downloaded takes the page.
+  const tiers = dev ? [stored] : (rev ? [CDN + rev.sha + '/'] : []).concat([CDN + 'main/', stored]);
+  let i = 0;
+  const next = function () {
+    if (window.__escClaim || i >= tiers.length) return;
+    const base = tiers[i++];
+    const timer = setTimeout(next, 2000);
+    import(base + 'js/boot.js').then(function (boot) { return boot.run(base); }).then(function () { clearTimeout(timer); }, function () { clearTimeout(timer); next(); });
+  };
+  next();
 })();
 </script>
 <script nomodule>document.getElementById('root').innerHTML='<p style="padding:24px;font:16px system-ui">This browser is too old to run the tool. Please update it, or open the page in a current version of Chrome, Edge, Firefox or Safari.</p>';</script>
