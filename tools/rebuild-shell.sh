@@ -15,14 +15,18 @@ for i in $(seq 1 60); do
   [ "$BUILT" = "$SHA" ] && break
   printf '.'; sleep 6
 done
-echo; sleep 25
-for ID in $(gh api "repos/$REPO/actions/runs" --paginate --jq '.workflow_runs[].id' 2>/dev/null); do
-  gh api -X DELETE "repos/$REPO/actions/runs/$ID" >/dev/null 2>&1 || true
+echo
+# Records can appear a little after the build finishes, so sweep several times.
+for PASS in 1 2 3 4; do
+  sleep 15
+  for ID in $(gh api "repos/$REPO/actions/runs" --paginate --jq '.workflow_runs[].id' 2>/dev/null); do
+    gh api -X DELETE "repos/$REPO/actions/runs/$ID" >/dev/null 2>&1 || true
+  done
+  for ID in $(gh api "repos/$REPO/deployments" --paginate --jq '.[].id' 2>/dev/null); do
+    gh api -X POST "repos/$REPO/deployments/$ID/statuses" -f state=inactive >/dev/null 2>&1 || true
+    gh api -X DELETE "repos/$REPO/deployments/$ID" >/dev/null 2>&1 || true
+  done
+  gh api -X DELETE "repos/$REPO/environments/github-pages" >/dev/null 2>&1 || true
 done
-for ID in $(gh api "repos/$REPO/deployments" --paginate --jq '.[].id' 2>/dev/null); do
-  gh api -X POST "repos/$REPO/deployments/$ID/statuses" -f state=inactive >/dev/null 2>&1 || true
-  gh api -X DELETE "repos/$REPO/deployments/$ID" >/dev/null 2>&1 || true
-done
-gh api -X DELETE "repos/$REPO/environments/github-pages" >/dev/null 2>&1 || true
 gh api -X PUT "repos/$REPO/actions/permissions" -F enabled=false >/dev/null
 echo "Loader rebuilt at $SHA. Build records cleared; Actions off."
