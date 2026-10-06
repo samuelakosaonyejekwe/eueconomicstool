@@ -52,23 +52,29 @@ async function officialText(url) {
 // 1. In-force status and end of validity.
 const named = STRATEGIES.flatMap(s => actsIn(s.eu)).concat(LEVERS.flatMap(l => actsIn(l.law)));
 const ids = [...new Set(items.map(i => celexOf(i.url)).concat(named).filter(c => /^3\d{4}[RLD]\d{4}$/.test(c)))].sort();
-const query = 'PREFIX cdm: <http://publications.europa.eu/ontology/cdm#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?celex ?inforce ?end WHERE { VALUES ?celex { ' +
-  ids.map(c => '"' + c + '"^^xsd:string').join(' ') + ' } ?w cdm:resource_legal_id_celex ?celex . OPTIONAL { ?w cdm:resource_legal_in-force ?inforce } OPTIONAL { ?w cdm:resource_legal_date_end-of-validity ?end } }';
+const IDS = ids;
+const query = 'PREFIX cdm: <http://publications.europa.eu/ontology/cdm#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?celex ?inforce ?end (MAX(?d) AS ?changed) WHERE { VALUES ?celex { ' + IDS.map(function (c) { return '"' + c + '"^^xsd:string'; }).join(' ') + ' } ?w cdm:resource_legal_id_celex ?celex . OPTIONAL { ?w cdm:resource_legal_in-force ?inforce } OPTIONAL { ?w cdm:resource_legal_date_end-of-validity ?end } OPTIONAL { VALUES ?rel { cdm:resource_legal_amends_resource_legal cdm:resource_legal_repeals_resource_legal cdm:resource_legal_implicitly_repeals_resource_legal cdm:resource_legal_partially_repeals_resource_legal cdm:resource_legal_extends_validity_of_resource_legal cdm:resource_legal_replaces_resource_legal cdm:resource_legal_suspends_resource_legal cdm:resource_legal_partially_suspends_resource_legal } ?a ?rel ?w . ?a cdm:work_date_document ?d } } GROUP BY ?celex ?inforce ?end';
 const sparql = await get('https://publications.europa.eu/webapi/rdf/sparql?query=' + encodeURIComponent(query), { Accept: 'application/sparql-results+json' });
 const status = {};
 if (sparql) for (const b of JSON.parse(sparql).results.bindings) {
-  const end = b.end ? b.end.value.slice(0, 10) : '', inforce = b.inforce ? /^(1|true)$/.test(b.inforce.value) : null;
-  if (end || inforce !== null) status[b.celex.value] = [end || '9999-12-31', inforce !== false];
+  const end = b.end ? b.end.value.slice(0, 10) : '', inforce = b.inforce ? /^(1|true)$/.test(b.inforce.value) : null, changed = b.changed ? b.changed.value.slice(0, 10) : '';
+  if (!end && inforce === null) continue;
+  // An act can appear more than once; keep the reading that is in force with the latest end date.
+  const cur = status[b.celex.value], next = [end || '9999-12-31', inforce !== false, changed];
+  if (!cur || (next[1] && !cur[1]) || (next[1] === cur[1] && next[0] > cur[0])) status[b.celex.value] = [next[0], next[1], cur && cur[2] > changed ? cur[2] : changed];
+  else if (changed > cur[2]) cur[2] = changed;
 }
 const today = new Date().toISOString().slice(0, 10);
 if (Object.keys(status).length) {
-  const lines = Object.keys(status).sort().map(c => "  '" + c + "': ['" + status[c][0] + "', " + status[c][1] + ']');
+  const lines = Object.keys(status).sort().map(c => "  '" + c + "': ['" + status[c][0] + "', " + status[c][1] + ", '" + status[c][2] + "']");
   writeFileSync(new URL('../js/legal-status.js', import.meta.url),
-    "// Written by tools/check-sources.mjs from the EU Publications Office database.\n// For each cited EU act: [last day it applies ('9999-12-31' = no end date), in force when checked].\n" +
+    "// Written by tools/check-sources.mjs from the EU Publications Office database.\n// For each cited EU act: [last day it applies ('9999-12-31' = no end date), in force when checked,\n// date of the latest act amending, repealing or extending it].\n" +
     "export const STATUS_CHECKED = '" + today + "';\nexport const STATUS = {\n" + lines.join(',\n') + '\n};\n');
 }
 console.log('EU acts cited:', ids.length, '| status found for', Object.keys(status).length);
 for (const c of Object.keys(status).sort()) if (status[c][0] !== '9999-12-31' || !status[c][1]) console.log('  ' + c + (status[c][1] ? ' applies until ' : ' NOT IN FORCE, ended ') + status[c][0]);
+const { REVIEWED_ISO } = await import('../js/strategies.js');
+for (const c of Object.keys(status).sort()) if (status[c][2] > REVIEWED_ISO) console.log('  ' + c + ' CHANGED on ' + status[c][2] + ', after the notes were last read (' + REVIEWED_ISO + '): re-read the notes citing it');
 const noStatus = ids.filter(c => !status[c]); if (noStatus.length) console.log('  no status returned for:', noStatus.join(', '));
 
 // 2. Is the recorded passage in the official text?

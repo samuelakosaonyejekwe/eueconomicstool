@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-raIRWUaIzfgaF1aLJZIAAtzXubqmeLh00lYGNojgx7s=' https://publications.europa.eu/webapi/rdf/sparql">
+<title>EU act status reader</title>
+</head>
+<body>
+<script>
+// Sealed reader. The tool opens this page in a sandboxed frame with its own, separate
+// origin, so nothing loaded here can see or change the tool, its data or its storage.
+// It asks the EU Publications Office database whether the acts named in the address are
+// in force, until when, and when they were last amended or repealed. The database only
+// answers cross-site in script-callback form, which is why the reply is loaded as a script
+// here, inside the seal. Only checked values (document numbers, dates, yes/no) are passed on.
+(function () {
+  var IDS = decodeURIComponent(location.hash.slice(1)).split(',').filter(function (c) { return /^3\d{4}[RLD]\d{4}$/.test(c); }).slice(0, 200);
+  var reply = function (rows) { parent.postMessage({ escActs: rows }, '*'); };
+  if (!IDS.length) { reply(null); return; }
+  var date = function (x) { return x && /^\d{4}-\d{2}-\d{2}/.test(x.value) ? x.value.slice(0, 10) : ''; };
+  window.escReply = function (j) {
+    var out = [];
+    try {
+      j.results.bindings.forEach(function (b) {
+        var c = b.celex ? String(b.celex.value) : '';
+        if (IDS.indexOf(c) < 0) return;
+        out.push([c, date(b.end), b.inforce ? (/^(1|true)$/.test(b.inforce.value) ? 1 : 0) : -1, date(b.changed)]);
+      });
+    } catch (e) { out = null; }
+    reply(out);
+  };
+  var query = 'PREFIX cdm: <http://publications.europa.eu/ontology/cdm#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?celex ?inforce ?end (MAX(?d) AS ?changed) WHERE { VALUES ?celex { ' + IDS.map(function (c) { return '"' + c + '"^^xsd:string'; }).join(' ') + ' } ?w cdm:resource_legal_id_celex ?celex . OPTIONAL { ?w cdm:resource_legal_in-force ?inforce } OPTIONAL { ?w cdm:resource_legal_date_end-of-validity ?end } OPTIONAL { VALUES ?rel { cdm:resource_legal_amends_resource_legal cdm:resource_legal_repeals_resource_legal cdm:resource_legal_implicitly_repeals_resource_legal cdm:resource_legal_partially_repeals_resource_legal cdm:resource_legal_extends_validity_of_resource_legal cdm:resource_legal_replaces_resource_legal cdm:resource_legal_suspends_resource_legal cdm:resource_legal_partially_suspends_resource_legal } ?a ?rel ?w . ?a cdm:work_date_document ?d } } GROUP BY ?celex ?inforce ?end';
+  var s = document.createElement('script');
+  s.src = 'https://publications.europa.eu/webapi/rdf/sparql?query=' + encodeURIComponent(query) + '&format=' + encodeURIComponent('application/sparql-results+json') + '&callback=escReply';
+  s.onerror = function () { reply(null); };
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>

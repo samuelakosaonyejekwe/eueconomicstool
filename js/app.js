@@ -8,7 +8,7 @@ import { PAGE_METHOD } from './method.js';
 
 const BASE = new URL('../', import.meta.url).href;
 const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || (BASE.indexOf('@main/') > 0 ? 'latest' : 'stored copy');
-const VERSION = '1.8.0'; // the only place the release number is written
+const VERSION = '1.9.0'; // the only place the release number is written
 window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
@@ -73,60 +73,73 @@ const ACT_IDS = (function () {
   M.LEVERS.forEach(function (l) { if (l.ref) add(celexOf(l.ref[1])); actsIn(l.law).forEach(add); });
   return ids;
 })();
-// Each visitor's browser asks the EU Publications Office database directly whether those acts are
-// still in force, once a day. That database does not accept ordinary cross-site requests but does
-// answer in script-callback form, so the reply arrives through a script element. Until a live reply
-// arrives, and whenever the database cannot be reached, the dates stored with the tool are used.
-let LIVE = LS.get('acts');
+// Each visitor's browser asks the EU Publications Office database, once a day, whether those acts
+// are still in force, until when, and when they were last amended or repealed. That database only
+// answers cross-site in script-callback form, so the question is put by a small sealed page
+// (acts.html) opened in a sandboxed frame with its own separate origin: whatever the database
+// returns can run only inside that seal and cannot reach this tool. The frame passes back plain
+// values, which are checked again here. Until a live reply arrives, and whenever the database
+// cannot be reached, the values stored with the tool are used.
+let LIVE = LS.get('acts2');
 if (!LIVE || !LIVE.s || typeof LIVE.at !== 'number') LIVE = null;
 function actOf(c) { return LIVE && LIVE.s[c] ? LIVE.s[c] : STATUS[c]; }
+let actsBusy = false;
 function refreshActs() {
-  if (!online || window.__escActsBusy || (LIVE && Date.now() - LIVE.at < 24 * 3600000) || !/^https?:$/.test(location.protocol)) return;
-  window.__escActsBusy = true;
-  const tag = document.createElement('script');
-  const done = function () { window.__escActsBusy = false; clearTimeout(timer); tag.remove(); };
-  const timer = setTimeout(done, 40000);
-  window.__escActs = function (j) {
-    try {
-      const out = {};
-      j.results.bindings.forEach(function (b) {
-        const c = b.celex ? String(b.celex.value) : '';
-        if (ACT_IDS.indexOf(c) < 0) return;
-        const end = b.end && /^\d{4}-\d{2}-\d{2}/.test(b.end.value) ? b.end.value.slice(0, 10) : '';
-        const inforce = b.inforce ? /^(1|true)$/.test(b.inforce.value) : null;
-        if (end || inforce !== null) out[c] = [end || '9999-12-31', inforce !== false];
-      });
-      if (Object.keys(out).length >= ACT_IDS.length / 2) {
-        LIVE = { at: Date.now(), s: out }; LS.set('acts', LIVE);
-        const act = document.activeElement;
-        if (['strategies', 'simulator', 'method'].indexOf(st.page) >= 0 && !(act && /INPUT|SELECT/.test(act.tagName) && $('app').contains(act))) render(true);
-      }
-    } catch (e) { /* unexpected reply: keep the stored dates */ }
+  if (!online || actsBusy || (LIVE && Date.now() - LIVE.at < 24 * 3600000) || !/^https?:$/.test(location.protocol)) return;
+  actsBusy = true;
+  const frame = document.createElement('iframe');
+  frame.setAttribute('sandbox', 'allow-scripts');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.tabIndex = -1;
+  frame.title = 'EU act status reader';
+  frame.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+  const done = function () { actsBusy = false; clearTimeout(timer); window.removeEventListener('message', onReply); frame.remove(); };
+  const timer = setTimeout(done, 45000);
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  const onReply = function (e) {
+    if (e.source !== frame.contentWindow || !e.data || !('escActs' in e.data)) return;
+    const rows = e.data.escActs, out = {};
+    if (Array.isArray(rows)) rows.forEach(function (r) {
+      if (!Array.isArray(r) || ACT_IDS.indexOf(r[0]) < 0) return;
+      const end = iso.test(r[1]) ? r[1] : '', inforce = r[2] === 1 ? true : r[2] === 0 ? false : null, changed = iso.test(r[3]) ? r[3] : '';
+      if (!end && inforce === null) return;
+      // An act can appear more than once; keep the reading that is in force with the latest end date.
+      const cur = out[r[0]], next = [end || '9999-12-31', inforce !== false, changed];
+      if (!cur || (next[1] && !cur[1]) || (next[1] === cur[1] && next[0] > cur[0])) out[r[0]] = [next[0], next[1], cur && cur[2] > changed ? cur[2] : changed];
+      else if (changed > cur[2]) cur[2] = changed;
+    });
+    if (Object.keys(out).length >= ACT_IDS.length / 2) {
+      LIVE = { at: Date.now(), s: out }; LS.set('acts2', LIVE);
+      const act = document.activeElement;
+      if (['strategies', 'simulator', 'method'].indexOf(st.page) >= 0 && !(act && /INPUT|SELECT/.test(act.tagName) && $('app').contains(act))) render(true);
+    }
     done();
   };
-  const query = 'PREFIX cdm: <http://publications.europa.eu/ontology/cdm#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?celex ?inforce ?end WHERE { VALUES ?celex { ' +
-    ACT_IDS.map(function (c) { return '"' + c + '"^^xsd:string'; }).join(' ') + ' } ?w cdm:resource_legal_id_celex ?celex . OPTIONAL { ?w cdm:resource_legal_in-force ?inforce } OPTIONAL { ?w cdm:resource_legal_date_end-of-validity ?end } }';
-  tag.src = 'https://publications.europa.eu/webapi/rdf/sparql?query=' + encodeURIComponent(query) + '&format=' + encodeURIComponent('application/sparql-results+json') + '&callback=__escActs';
-  tag.onerror = done;
-  document.head.appendChild(tag);
+  window.addEventListener('message', onReply);
+  frame.src = new URL('acts.html', document.baseURI).href + '#' + encodeURIComponent(ACT_IDS.join(','));
+  document.body.appendChild(frame);
 }
 function actsNote() {
-  return LIVE ? 'In-force status of the ' + ACT_IDS.length + ' EU acts cited was read live from the EU Publications Office database ' + ago(LIVE.at) + '.'
-    : 'In-force status of the ' + ACT_IDS.length + ' EU acts cited is as stored on ' + periodLabel(STATUS_CHECKED) + '; a live reading is made whenever the EU Publications Office database can be reached.';
+  return LIVE ? 'Whether each of the ' + ACT_IDS.length + ' EU acts cited is in force, and when it was last amended, was read live from the EU Publications Office database ' + ago(LIVE.at) + '.'
+    : 'Whether each of the ' + ACT_IDS.length + ' EU acts cited is in force, and when it was last amended, is as stored on ' + periodLabel(STATUS_CHECKED) + '; a live reading is made whenever the EU Publications Office database can be reached.';
 }
 function actStatus(url, today, text) {
   today = today || isoToday();
   // the act behind the source link, plus every regulation or directive the note itself names
   const ids = [celexOf(url)].concat(actsIn(text)).filter(function (c, i, a) { return c && actOf(c) && a.indexOf(c) === i; });
-  let ended = null, until = null;
+  let ended = null, until = null, changed = null;
   ids.forEach(function (c) {
     const st = actOf(c);
     if (!st[1] || st[0] < today) { if (!ended || st[0] < ended[0]) ended = [st[0], c]; }
     else if (st[0] !== '9999-12-31' && (!until || st[0] < until[0])) until = [st[0], c];
+    // amended, repealed or extended by another act after the notes were last read
+    if (st[2] && st[2] > REVIEWED_ISO && (!changed || st[2] > changed[0])) changed = [st[2], c];
   });
-  const name = function (c) { return (c[5] === 'R' ? 'Regulation ' : 'Directive ') + (+c.slice(1, 5) >= 2015 ? c.slice(1, 5) + '/' + (+c.slice(6)) : (+c.slice(6)) + '/' + c.slice(1, 5)); };
+  // Directives are numbered year/number; regulations were number/year until 2015 and year/number since.
+  const name = function (c) { const y = c.slice(1, 5), n = +c.slice(6); return c[5] === 'L' ? 'Directive ' + y + '/' + n : 'Regulation ' + (+y >= 2015 ? y + '/' + n : n + '/' + y); };
   if (ended) return ' ' + badge(name(ended[1]) + ' has not applied since ' + periodLabel(ended[0]) + ': see the source for what replaced it', 'crit');
-  return until ? ' ' + badge(name(until[1]) + ' applies until ' + periodLabel(until[0]), 'warn') : '';
+  return (changed ? ' ' + badge(name(changed[1]) + ' was changed by a later act on ' + periodLabel(changed[0]) + ', after this note was checked: read the source', 'serious') : '') +
+    (until ? ' ' + badge(name(until[1]) + ' applies until ' + periodLabel(until[0]), 'warn') : '');
 }
 function reviewAge(today) {
   const days = (Date.parse(today || isoToday()) - Date.parse(REVIEWED_ISO)) / 86400000;

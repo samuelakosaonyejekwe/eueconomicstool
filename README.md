@@ -27,7 +27,7 @@ There is no private server. `data/snapshot.json` is a bundled baseline shown on 
 
 ## Legal notes and evidence
 
-Every EU legal note links to the official text it rests on, and every simulator coefficient links to the studies behind it. `node tools/check-sources.mjs` re-checks them: it confirms that the passage recorded for each note (`data/legal-quotes.json`) appears in the official text, and reads each cited act's in-force status and last day of application from the EU Publications Office database into `js/legal-status.js`. The tool uses those dates to flag a note by itself once its act stops applying. Run the check before each release; update the review date in `js/strategies.js` only after re-reading the notes.
+Every EU legal note links to the official text it rests on, and every simulator coefficient links to the studies behind it. `node tools/check-sources.mjs` re-checks them: it confirms that the passage recorded for each note (`data/legal-quotes.json`) appears in the official text, and reads each cited act's in-force status and last day of application from the EU Publications Office database into `js/legal-status.js`. Each visitor's browser also reads the same status live, once a day, through `acts.html`, a sealed page run in a sandboxed frame; the stored values are the fallback. A note is flagged by itself when an act behind it stops applying or is changed by a later act. Run the check before each release; update the review date in `js/strategies.js` only after re-reading the notes.
 
 ## Install and offline use
 
@@ -37,7 +37,7 @@ The tool is a progressive web app. Use the **Install app** button, or the browse
 
 Commit to `main` — with `git push` from any computer, or by editing a file on github.com. Nothing else is needed: the page looks up the newest commit and runs that exact version through the jsDelivr CDN, so changes reach people the next time they open the tool (it re-checks every ten minutes or so), with no build step.
 
-GitHub Pages serves only a small loader, from the `live` branch, so ordinary commits to `main` cause no GitHub build. The one exception: after changing a loader file (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`), run `tools/rebuild-shell.sh` once to copy `main` to `live`. If you edited a script inside `index.html`, run `node tools/csp.mjs` first so the page's security policy lists the new script.
+GitHub Pages serves only a small loader, from the `live` branch, so ordinary commits to `main` cause no GitHub build. The one exception: after changing a loader file (`index.html`, `acts.html`, `sw.js`, `manifest.webmanifest`, `icons/`), run `tools/rebuild-shell.sh` once to copy `main` to `live`. If you edited a script inside `index.html` or `acts.html`, run `node tools/csp.mjs` first so the page's security policy lists the new script.
 
 ## Hosting it elsewhere
 

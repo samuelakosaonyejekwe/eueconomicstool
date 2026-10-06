@@ -2,7 +2,7 @@
 # Rarely needed. The live site picks up every commit to main by itself. GitHub
 # Pages serves only a small loader from the separate `live` branch, so ordinary
 # pushes cause no GitHub build at all. Run this only after changing a loader
-# file (index.html, sw.js, manifest.webmanifest, icons); it copies main to
+# file (index.html, acts.html, sw.js, manifest.webmanifest, icons); it copies main to
 # `live`, which also refreshes the stored fallback copy, then removes the build
 # records that this one rebuild creates and switches Actions back off.
 set -e

@@ -4,7 +4,7 @@
 // not intercepted here.
 const CACHE = 'esc-v3';
 const CDN = 'https://cdn.jsdelivr.net/gh/samuelakosaonyejekwe/eueconomicstool@';
-const SHELL = ['./', 'index.html', 'css/app.css', 'js/boot.js', 'js/app.js', 'js/shell.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js',
+const SHELL = ['./', 'index.html', 'acts.html', 'css/app.css', 'js/boot.js', 'js/app.js', 'js/shell.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js',
   'js/strategies.js', 'js/legal-status.js', 'js/method.js', 'data/snapshot.json', 'manifest.webmanifest', 'mirrors.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'];
 
@@ -53,14 +53,16 @@ self.addEventListener('fetch', function (e) {
   }
   if (url.origin !== self.location.origin) return;
   e.respondWith(caches.open(CACHE).then(function (cache) {
-    const key = req.mode === 'navigate' ? 'index.html' : req;
+    // Opening the tool itself always resolves to its one page; any other document keeps its own address.
+    const home = req.mode === 'navigate' && /\/(index\.html)?$/.test(url.pathname);
+    const key = home ? 'index.html' : req;
     return cache.match(key, { ignoreSearch: req.mode === 'navigate' }).then(function (hit) {
       const net = fetch(req).then(function (res) {
         if (res && res.ok) cache.put(key, res.clone());
         return res;
       });
       if (hit) { e.waitUntil(net.catch(function () { /* offline */ })); return hit; }
-      return net.catch(function () { return cache.match('index.html'); });
+      return net.catch(function () { return home ? cache.match('index.html') : Response.error(); });
     });
   }));
 });
