@@ -59,7 +59,18 @@ function subtabs(page) {
     return '<button role="tab" aria-selected="' + (st.sub[page] === s[0]) + '" data-sub="' + s[0] + '">' + s[1] + '</button>';
   }).join('') + '</div>';
 }
-function head(title, lead, extra) { return '<div class="ph"><div><h2>' + title + '</h2><p>' + lead + '</p></div>' + (extra || '') + '</div>'; }
+const ARROW_L = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg>', ARROW_R = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg>';
+function neighbours() {
+  const i = PAGES.map(function (p) { return p.k; }).indexOf(st.page);
+  return { i: i, prev: PAGES[(i + PAGES.length - 1) % PAGES.length], next: PAGES[(i + 1) % PAGES.length] };
+}
+function head(title, lead, extra) {
+  const nb = neighbours();
+  return '<div class="ph"><div class="pht"><h2>' + title + '</h2><p>' + lead + '</p>' + (extra || '') + '</div><div class="hop">' +
+    '<a class="hopb" href="./" data-go="' + nb.prev.k + '" aria-label="Back to ' + nb.prev.n + '" title="Back: ' + nb.prev.n + '">' + ARROW_L + '</a>' +
+    '<span>' + (nb.i + 1) + ' / ' + PAGES.length + '</span>' +
+    '<a class="hopb" href="./" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '" title="Next: ' + nb.next.n + '">' + ARROW_R + '</a></div></div>';
+}
 function heatStep(pi) {
   if (typeof pi !== 'number') return 'hx';
   return pi < 0 ? 'h0' : pi < 1 ? 'h1' : pi < 1.5 ? 'h2' : pi <= 2.5 ? 'h3' : pi <= 3.5 ? 'h4' : pi <= 5 ? 'h5' : pi <= 7 ? 'h6' : 'h7';
@@ -168,10 +179,10 @@ function pageCountry() {
         { name: m.n + ', all items', values: ea.s['TOTAL|' + st.c] || [], color: 1 }, { name: m.n + ', core', values: ea.s['TOT_X_NRG_FOOD|' + st.c] || [], color: 2 }]
         .concat(st.c === 'EA' ? [] : [{ name: 'Euro area, all items', values: ea.s['TOTAL|EA'], color: 7, dash: true }]) });
     }), { sub: 'Annual HICP rate, %', src: 'hicp' }) +
-    card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="#/inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
+    card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="./" data-go="inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
     '</div><div class="grid two">' +
     card('Prices by spending category', barList(div, { unit: '%', ref: s.pi, refLabel: 'Overall inflation, ' + pct(s.pi) }) + '<h4 class="grp" style="margin-top:18px">Also watch</h4><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %', src: 'hicpd' }) +
-    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="#/strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
+    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="./" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
     '</div>';
 }
 
@@ -392,7 +403,7 @@ function pageSimulator() {
   return head('Policy Simulator · ' + esc(s.meta.n), 'Combine measures and see their estimated first-year effect on inflation, the budget and growth.') +
     '<div class="chipset">' + Object.keys(PRESETS).map(function (k) { return '<button class="chip" data-act="preset" data-k="' + k + '">' + PRESETS[k].n + '</button>'; }).join('') + '<button class="chip" data-act="preset" data-k="">Clear all</button></div>' +
     '<div class="grid two">' + card('Measures', left, { sub: 'Set the size of each measure' }) +
-    card('Estimated effect', '<div id="out">' + simOut() + '</div><p class="note">These are stylised estimates from published rules of thumb, shown with a range. They are a guide for comparing options, not a forecast. Every assumption is listed under <a href="#/method/how">Data & Method</a>.</p>', { sub: 'Starting from live figures for ' + esc(s.meta.n), src: ['hicp', 'hicpw', 'fiscal'], cls: 'sticky' }) + '</div>';
+    card('Estimated effect', '<div id="out">' + simOut() + '</div><p class="note">These are stylised estimates from published rules of thumb, shown with a range. They are a guide for comparing options, not a forecast. Every assumption is listed under <a href="./" data-go="method/how">Data & Method</a>.</p>', { sub: 'Starting from live figures for ' + esc(s.meta.n), src: ['hicp', 'hicpw', 'fiscal'], cls: 'sticky' }) + '</div>';
 }
 
 // ---------- Strategies ----------
@@ -474,11 +485,11 @@ function render(keepScroll) {
   catch (e) { html = '<div class="card"><div class="cb"><p class="empty">This view could not be drawn with the data currently available. Try “Refresh all now” under Data & Method.</p></div></div>'; if (window.console) console.error(e); }
   app.innerHTML = html;
   draw();
-  const i = PAGES.map(function (p) { return p.k; }).indexOf(st.page), prev = PAGES[(i + PAGES.length - 1) % PAGES.length], next = PAGES[(i + 1) % PAGES.length];
-  $('nav').innerHTML = PAGES.map(function (p, j) { return '<a href="#/' + p.k + '"' + (p.k === st.page ? ' aria-current="page"' : '') + '><i>' + (j + 1) + '</i>' + p.n + '</a>'; }).join('');
-  $('pager').innerHTML = '<a class="pg prev" href="#/' + prev.k + '" aria-label="Previous page: ' + prev.n + '"><span class="arr"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span><span><small>Back</small><b>' + prev.n + '</b></span></a>' +
-    '<span class="dots" aria-hidden="true">' + PAGES.map(function (p, j) { return '<i' + (j === i ? ' class="on"' : '') + '></i>'; }).join('') + '</span>' +
-    '<a class="pg next" href="#/' + next.k + '" aria-label="Next page: ' + next.n + '"><span><small>Next</small><b>' + next.n + '</b></span><span class="arr"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></span></a>';
+  const nb = neighbours(), i = nb.i, prev = nb.prev, next = nb.next;
+  $('nav').innerHTML = PAGES.map(function (p, j) { return '<a href="./" data-go="' + p.k + '"' + (p.k === st.page ? ' aria-current="page"' : '') + '><i>' + (j + 1) + '</i>' + p.n + '</a>'; }).join('');
+  $('pager').innerHTML = '<a class="pg prev" href="./" data-go="' + prev.k + '" aria-label="Back to ' + prev.n + '"><span class="arr">' + ARROW_L + '</span><span class="pgl"><small>Back</small><b>' + prev.n + '</b></span></a>' +
+    '<span class="dots" aria-label="Page ' + (i + 1) + ' of ' + PAGES.length + '">' + PAGES.map(function (p, j) { return '<a href="./" data-go="' + p.k + '" title="' + p.n + '"' + (j === i ? ' class="on"' : '') + '></a>'; }).join('') + '</span>' +
+    '<a class="pg next" href="./" data-go="' + next.k + '" aria-label="Forward to ' + next.n + '"><span class="pgl"><small>Next</small><b>' + next.n + '</b></span><span class="arr">' + ARROW_R + '</span></a>';
   const cur = $('nav').querySelector('[aria-current]');
   if (cur && cur.scrollIntoView && !keepScroll) { try { cur.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* older browsers */ } }
   $('csel').value = st.c; $('rsel').value = st.role;
@@ -489,22 +500,26 @@ function render(keepScroll) {
 function out() { const o = $('out'); if (!o) return; const fn = OUT[st.page + (st.sub[st.page] ? '.' + st.sub[st.page] : '')]; if (fn) { o.innerHTML = fn(); draw(); save(); } }
 const OUT = { 'simulator': simOut, 'strategies': stratList, 'inflation.personal': personalOut, 'currency.lock': lockOut, 'currency.bond': bondOut, 'currency.basket': basketOut, 'currency.voucher': voucherOut };
 
-function route() {
-  const p = location.hash.replace(/^#\/?/, '').split('/');
-  if (RENDER[p[0]]) {
-    st.page = p[0];
-    if (p[1]) { if (p[0] === 'country' && BY_CODE[p[1]]) setCountry(p[1], true); else if (SUBS[p[0]] && SUBS[p[0]].some(function (s) { return s[0] === p[1]; })) st.sub[p[0]] = p[1]; }
-  }
+// Navigation keeps the address bar unchanged; the browser's own back and forward buttons still work.
+function show(page, sub) {
+  if (!RENDER[page]) page = 'overview';
+  st.page = page;
+  if (sub) { if (page === 'country' && BY_CODE[sub]) { st.c = sub; st.shares = null; } else if (SUBS[page] && SUBS[page].some(function (x) { return x[0] === sub; })) st.sub[page] = sub; }
   render();
 }
-function go(page, sub) { const h = '#/' + page + (sub ? '/' + sub : ''); if (location.hash === h) render(); else location.hash = h; }
+function go(page, sub) {
+  try { history.pushState({ p: page, s: sub || '' }, ''); } catch (e) { /* history unavailable */ }
+  show(page, sub);
+}
+window.addEventListener('popstate', function (e) { const x = e.state || { p: 'overview', s: '' }; show(x.p, x.s); });
 function setCountry(c, quiet) { if (!BY_CODE[c]) return; st.c = c; st.shares = null; if (!quiet) render(true); }
 
 document.addEventListener('click', function (e) {
   let t = e.target;
-  while (t && t !== document && !(t.dataset && (t.dataset.sub || t.dataset.act || t.dataset.country))) t = t.parentNode;
+  while (t && t !== document && !(t.dataset && (t.dataset.go || t.dataset.sub || t.dataset.act || t.dataset.country))) t = t.parentNode;
   if (!t || t === document) return;
   const ds = t.dataset;
+  if (ds.go) { e.preventDefault(); const g = ds.go.split('/'); go(g[0], g[1]); return; }
   if (ds.sub) { go(st.page, ds.sub); return; }
   if (ds.country) { if (ds.open) { st.c = ds.country; st.shares = null; go('country', ds.country); } else if (st.page === 'compare') { toggleCmp(ds.country); } else setCountry(ds.country); return; }
   const a = ds.act;
@@ -524,8 +539,8 @@ document.addEventListener('keydown', function (e) {
   const t = e.target;
   if (e.key === 'Enter' && t.dataset && t.dataset.country) { t.click(); return; }
   if (/INPUT|SELECT|TEXTAREA/.test(t.tagName) || e.altKey || e.ctrlKey || e.metaKey) return;
-  if (e.key === 'ArrowRight') { const n = document.querySelector('.pg.next'); if (n) location.hash = n.getAttribute('href'); }
-  if (e.key === 'ArrowLeft') { const n = document.querySelector('.pg.prev'); if (n) location.hash = n.getAttribute('href'); }
+  if (e.key === 'ArrowRight') go(neighbours().next.k);
+  if (e.key === 'ArrowLeft') go(neighbours().prev.k);
 });
 document.addEventListener('input', function (e) {
   const t = e.target, ds = t.dataset, v = parseFloat(t.value);
@@ -546,7 +561,6 @@ document.addEventListener('change', function (e) {
 });
 let rz = 0;
 window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(draw, 150); });
-window.addEventListener('hashchange', route);
 
 function download(name, text, type) {
   const a = document.createElement('a');
@@ -593,9 +607,10 @@ function boot() {
   }).catch(function () { /* first visit while offline: wait for live data */ }) : Promise.resolve();
   $('csel').innerHTML = '<optgroup label="Member states">' + COUNTRIES.map(function (c) { return '<option value="' + c.c + '">' + c.n + '</option>'; }).join('') + '</optgroup><optgroup label="Aggregates"><option value="EU">European Union</option><option value="EA">Euro area</option></optgroup>';
   $('rsel').innerHTML = ROLES.map(function (r) { return '<option value="' + r.k + '">' + r.n + '</option>'; }).join('');
-  if (!location.hash) { try { history.replaceState(null, '', '#/' + st.page); } catch (e) { /* file:// */ } }
+  st.page = 'overview';
+  try { history.replaceState({ p: 'overview', s: '' }, '', location.pathname + location.search); } catch (e) { /* file:// */ }
   base.then(function () {
-    route();
+    show('overview');
     refresh(CORE_IDS).then(function () { refresh(ALL_IDS); });
   });
   setInterval(function () { if (!document.hidden && online) refresh(ALL_IDS); }, 15 * 60000);
