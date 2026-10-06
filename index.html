@@ -26,10 +26,10 @@ body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans
 <div id="root"><div id="boot"><i></i>Opening EU Stability Compass…</div></div>
 <noscript><p style="padding:24px;font:16px system-ui">EU Stability Compass needs JavaScript to fetch and chart live statistics. Please enable it and reload.</p></noscript>
 <script type="module">
-// Loader. Finds the newest published commit of the tool and runs exactly that
+// Loader. Finds the newest published commit of the tool and starts exactly that
 // version from a content delivery network, so every change to the repository
-// goes live by itself. If the network or the lookup is unavailable it runs the
-// copy stored with this page instead.
+// goes live by itself. If that is unavailable it falls back, first to the CDN's
+// own latest copy, then to the copy stored with this page.
 const REPO = 'samuelakosaonyejekwe/eueconomicstool';
 const CDN = 'https://cdn.jsdelivr.net/gh/' + REPO + '@';
 const KEY = 'esc.rev';
@@ -37,59 +37,26 @@ const dev = /^(localhost|127\.|\[::1\])/.test(location.hostname) || location.pro
 let rev = null;
 try { rev = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* storage blocked */ }
 if (!rev || !/^[0-9a-f]{40}$/.test(rev.sha || '')) rev = null;
-const running = rev ? rev.sha : '';
-
-function store() { try { localStorage.setItem(KEY, JSON.stringify(rev)); } catch (e) { /* storage blocked */ } }
-function style(base) {
-  return new Promise(function (done) {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet'; l.href = base + 'css/app.css';
-    l.onload = function () { done(l); };
-    l.onerror = function () { l.remove(); done(null); };
-    setTimeout(function () { if (!l.sheet) { l.remove(); done(null); } }, 6000);
-    document.head.appendChild(l);
-  });
-}
-async function start(base) {
-  if (!(await style(base))) throw new Error('stylesheet unavailable');
-  const frame = await import(base + 'js/shell.js');
-  document.getElementById('root').innerHTML = frame.SHELL;
-  await import(base + 'js/app.js');
-}
-async function check() {
-  if (dev || (rev && Date.now() - rev.at < 5 * 60000)) return;
+const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms, null); }); };
+async function lookup() {
   try {
-    const headers = { Accept: 'application/vnd.github.sha' };
-    if (rev && rev.etag) headers['If-None-Match'] = rev.etag;
-    const r = await fetch('https://api.github.com/repos/' + REPO + '/commits/main', { headers: headers, cache: 'no-store' });
-    if (r.status === 304 && rev) { rev.at = Date.now(); store(); return; }
-    if (!r.ok) return;
-    const sha = (await r.text()).trim();
-    if (!/^[0-9a-f]{40}$/.test(sha)) return;
-    rev = { sha: sha, etag: r.headers.get('ETag') || '', at: Date.now() };
-    store();
-    if (running && sha !== running) {
-      // Fetch the new version now so it is ready, also offline, on the next start.
-      ['js/app.js', 'js/shell.js'].forEach(function (f) { const l = document.createElement('link'); l.rel = 'modulepreload'; l.href = CDN + sha + '/' + f; document.head.appendChild(l); });
-      fetch(CDN + sha + '/css/app.css').catch(function () {});
-      window.__escUpdate = true;
-      window.dispatchEvent(new Event('esc-update'));
-    }
-  } catch (e) { /* offline or rate-limited: keep the current version */ }
+    const r = await fetch('https://api.github.com/repos/' + REPO + '/commits/main', { headers: { Accept: 'application/vnd.github.sha' }, cache: 'no-store' });
+    const sha = r.ok ? (await r.text()).trim() : '';
+    if (/^[0-9a-f]{40}$/.test(sha)) { rev = { sha: sha, at: Date.now() }; try { localStorage.setItem(KEY, JSON.stringify(rev)); } catch (e) { /* storage blocked */ } }
+  } catch (e) { /* offline or over the hourly allowance */ }
 }
 (async function () {
-  if (!rev && !dev) await Promise.race([check(), new Promise(function (r) { setTimeout(r, 3000); })]);
-  const sha = rev ? rev.sha : '';
-  try {
-    if (!sha || dev) throw new Error('use the stored copy');
-    await start(CDN + sha + '/');
-  } catch (e) {
-    if (!document.getElementById('app') || !window.__escStarted) await start('./');
+  if (!rev && !dev) await Promise.race([lookup(), wait(3000)]);
+  window.__esc = { repo: REPO, cdn: CDN, key: KEY, dev: dev, rev: rev };
+  const bases = dev ? ['./'] : (rev ? [CDN + rev.sha + '/'] : []).concat([CDN + 'main/', './']);
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const boot = await Promise.race([import(bases[i] + 'js/boot.js'), wait(i === bases.length - 1 ? 60000 : 8000)]);
+      if (!boot) continue;
+      await boot.run(bases[i]);
+      return;
+    } catch (e) { if (window.__escStarted) return; }
   }
-  if (sha && 'serviceWorker' in navigator) navigator.serviceWorker.ready.then(function (reg) { if (reg.active) reg.active.postMessage({ rev: sha }); }).catch(function () {});
-  check();
-  setInterval(check, 10 * 60000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
 })();
 </script>
 <script nomodule>document.getElementById('root').innerHTML='<p style="padding:24px;font:16px system-ui">This browser is too old to run the tool. Please update it, or open the page in a current version of Chrome, Edge, Firefox or Safari.</p>';</script>
