@@ -4,8 +4,6 @@ Economic decision support for the 27 EU member states.
 
 **Open the tool:** https://samuelakosaonyejekwe.github.io/eueconomicstool/
 
-Second route (same files, different network): https://raw.githack.com/samuelakosaonyejekwe/eueconomicstool/main/index.html
-
 ## What it does
 
 - **Overview** – live inflation map and ranking for all 27 member states, EU and euro-area headline figures.
