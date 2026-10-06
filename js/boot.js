@@ -27,13 +27,16 @@ export async function run(base) {
   if (window.__escClaim) return;
   base = new URL(base, document.baseURI).href;
   const x = window.__esc;
-  warm(base);
-  const sheet = await style(base);
-  if (!sheet) throw new Error('stylesheet unavailable');
-  let frame;
-  try { frame = await import(base + 'js/shell.js'); } catch (e) { sheet.remove(); throw e; }
+  // Download every file of this version first, so the page is claimed only by a
+  // copy that can start at once.
+  const got = await Promise.all([style(base)].concat(FILES.map(function (f) {
+    return fetch(base + f).then(function (r) { return r.ok; }, function () { return false; });
+  })));
+  const sheet = got[0];
+  if (!sheet || got.indexOf(false) >= 0) { if (sheet) sheet.remove(); throw new Error('version unavailable'); }
   if (window.__escClaim) { sheet.remove(); return; }
   window.__escClaim = base;
+  const frame = await import(base + 'js/shell.js');
   document.getElementById('root').innerHTML = frame.SHELL;
   await import(base + 'js/app.js');
   if (x.dev) return;
