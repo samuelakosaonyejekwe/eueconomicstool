@@ -5,7 +5,7 @@ import { STRATEGIES, CATEGORIES, ROLES, recommend, applies } from './strategies.
 import { lineChart, spark, barList, meter, fmt, esc, periodLabel } from './charts.js';
 import { PAGE_METHOD } from './method.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
   { k: 'currency', n: 'Currency & Trade' }, { k: 'simulator', n: 'Policy Simulator' }, { k: 'strategies', n: 'Strategies' },
