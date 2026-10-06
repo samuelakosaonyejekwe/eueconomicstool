@@ -33,7 +33,7 @@ The tool is a progressive web app. Use the **Install app** button, or the browse
 
 Commit to `main` — with `git push` from any computer, or by editing a file on github.com. Nothing else is needed: the page looks up the newest commit and runs that exact version through the jsDelivr CDN, so changes are live within about five minutes, with no build step.
 
-The only exception is the small loader that GitHub Pages serves directly (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`). After changing one of those, run `tools/rebuild-shell.sh` once.
+GitHub Pages serves only a small loader, from the `live` branch, so ordinary commits to `main` cause no GitHub build. The one exception: after changing a loader file (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`), run `tools/rebuild-shell.sh` once to copy `main` to `live`.
 
 ## Hosting it elsewhere
 

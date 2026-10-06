@@ -1,14 +1,17 @@
 #!/bin/sh
-# Rarely needed. The live site picks up every commit by itself. Run this only
-# after changing the loader files that are served directly by GitHub Pages
-# (index.html, sw.js, manifest.webmanifest, icons); it also refreshes the stored
-# fallback copy. It rebuilds the Pages site once and removes the build records.
+# Rarely needed. The live site picks up every commit to main by itself. GitHub
+# Pages serves only a small loader from the separate `live` branch, so ordinary
+# pushes cause no GitHub build at all. Run this only after changing the loader
+# files (index.html, sw.js, manifest.webmanifest, icons); it copies main to
+# `live`, which also refreshes the stored fallback copy, then removes the build
+# records that one rebuild creates.
 set -e
 REPO=$(git remote get-url origin | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
 SHA=$(git rev-parse origin/main)
+git fetch -q origin main
 gh api -X PUT "repos/$REPO/actions/permissions" -F enabled=true >/dev/null
 sleep 3
-gh api -X POST "repos/$REPO/pages/builds" >/dev/null
+git push -q origin "$SHA:refs/heads/live"
 printf 'Rebuilding'
 for i in $(seq 1 60); do
   BUILT=$(gh api "repos/$REPO/pages/builds/latest" --jq 'select(.status=="built") | .commit' 2>/dev/null || true)
