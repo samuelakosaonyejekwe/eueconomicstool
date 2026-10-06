@@ -7,7 +7,7 @@ import { PAGE_METHOD } from './method.js';
 
 const BASE = new URL('../', import.meta.url).href;
 const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || (BASE.indexOf('@main/') > 0 ? 'latest' : 'stored copy');
-const VERSION = '1.2.4 · build ' + BUILD;
+const VERSION = '1.3.0 · build ' + BUILD;
 window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
@@ -503,7 +503,13 @@ function render(keepScroll) {
 function out() { const o = $('out'); if (!o) return; const fn = OUT[st.page + (st.sub[st.page] ? '.' + st.sub[st.page] : '')]; if (fn) { o.innerHTML = fn(); draw(); save(); } }
 const OUT = { 'simulator': simOut, 'strategies': stratList, 'inflation.personal': personalOut, 'currency.lock': lockOut, 'currency.bond': bondOut, 'currency.basket': basketOut, 'currency.voucher': voucherOut };
 
-// Navigation keeps the address bar unchanged; the browser's own back and forward buttons still work.
+// Navigation. The address bar follows the page (for example …/#inflation/personal or
+// …/#country/PL) so any view can be bookmarked or shared. The overview is the bare address.
+function addr() {
+  const sub = st.page === 'country' ? st.c : SUBS[st.page] ? st.sub[st.page] : '';
+  return location.pathname + location.search + (st.page === 'overview' ? '' : '#' + st.page + (sub ? '/' + sub : ''));
+}
+function fromHash() { const p = location.hash.replace(/^#\/?/, '').split('/'); return { p: p[0] || 'overview', s: p[1] || '' }; }
 function show(page, sub) {
   if (!RENDER[page]) page = 'overview';
   st.page = page;
@@ -511,11 +517,12 @@ function show(page, sub) {
   render();
 }
 function go(page, sub) {
-  try { history.pushState({ p: page, s: sub || '' }, ''); } catch (e) { /* history unavailable */ }
   show(page, sub);
+  try { if (addr() !== location.pathname + location.search + location.hash) history.pushState(null, '', addr()); } catch (e) { /* history unavailable */ }
 }
-window.addEventListener('popstate', function (e) { const x = e.state || { p: 'overview', s: '' }; show(x.p, x.s); });
-function setCountry(c, quiet) { if (!BY_CODE[c]) return; st.c = c; st.shares = null; if (!quiet) render(true); }
+function syncAddr() { try { history.replaceState(null, '', addr()); } catch (e) { /* history unavailable */ } }
+window.addEventListener('popstate', function () { const x = fromHash(); show(x.p, x.s); });
+function setCountry(c, quiet) { if (!BY_CODE[c]) return; st.c = c; st.shares = null; if (!quiet) { render(true); syncAddr(); } }
 
 document.addEventListener('click', function (e) {
   let t = e.target;
@@ -610,10 +617,10 @@ function boot() {
   }).catch(function () { /* first visit while offline: wait for live data */ }) : Promise.resolve();
   $('csel').innerHTML = '<optgroup label="Member states">' + COUNTRIES.map(function (c) { return '<option value="' + c.c + '">' + c.n + '</option>'; }).join('') + '</optgroup><optgroup label="Aggregates"><option value="EU">European Union</option><option value="EA">Euro area</option></optgroup>';
   $('rsel').innerHTML = ROLES.map(function (r) { return '<option value="' + r.k + '">' + r.n + '</option>'; }).join('');
-  st.page = 'overview';
-  try { history.replaceState({ p: 'overview', s: '' }, '', location.pathname + location.search); } catch (e) { /* file:// */ }
+  const first = fromHash();
   base.then(function () {
-    show('overview');
+    show(first.p, first.s);
+    syncAddr();
     refresh(CORE_IDS).then(function () { refresh(ALL_IDS); });
   });
   setInterval(function () { if (!document.hidden && online) refresh(ALL_IDS); }, 15 * 60000);
