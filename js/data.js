@@ -138,16 +138,27 @@ function normaliseGeo(s, len) {
 
 function isoDaysAgo(days) { return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10); }
 
-// Daily euro reference rates. Three independent routes, tried in turn.
+// Runs the routes in order but without waiting for a slow one: the next route starts when the
+// previous one fails, or after `gap` ms if it has not answered yet. The first good answer wins.
+function firstOf(routes, gap) {
+  return new Promise(function (resolve, reject) {
+    let next = 0, failed = 0, settled = false;
+    const start = function () {
+      if (settled || next >= routes.length) return;
+      const timer = setTimeout(start, gap);
+      routes[next++]().then(function (v) { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } },
+        function () { clearTimeout(timer); failed++; if (failed === routes.length) reject(new Error('all routes failed')); else start(); });
+    };
+    start();
+  });
+}
+
+// Daily euro reference rates, from three independent routes: the European Central Bank's own data
+// service first, then Eurostat's copy, then frankfurter.dev (a public mirror of the ECB rates).
 function fetchFx() {
   const start = isoDaysAgo(760);
-  return getJson(FRANK + start + '..?base=EUR&symbols=' + FX_CODES.join(','), 20000).then(function (j) {
-    const t = Object.keys(j.rates).sort(), s = {};
-    FX_CODES.forEach(function (c) { s[c] = t.map(function (d) { const v = j.rates[d][c]; return typeof v === 'number' ? v : null; }); });
-    if (t.length < 50) throw new Error('short series');
-    return { t: t, s: s, upd: t[t.length - 1], via: 'frankfurter.dev (ECB reference rates)' };
-  }).catch(function () {
-    return getText(ECB + 'EXR/D.' + FX_CODES.join('+') + '.EUR.SP00.A?startPeriod=' + start + '&format=csvdata&detail=dataonly', 30000).then(function (csv) {
+  const fromEcb = function () {
+    return getText(ECB + 'EXR/D.' + FX_CODES.join('+') + '.EUR.SP00.A?startPeriod=' + start + '&format=csvdata&detail=dataonly', 25000).then(function (csv) {
       const rows = parseEcbCsv(csv), set = {}, by = {};
       rows.forEach(function (r) { set[r.t] = 1; (by[r.key] = by[r.key] || {})[r.t] = r.v; });
       const t = Object.keys(set).sort(), s = {};
@@ -155,11 +166,10 @@ function fetchFx() {
       if (t.length < 50) throw new Error('short series');
       return { t: t, s: s, upd: t[t.length - 1], via: 'ECB Data Portal' };
     });
-  }).catch(function () {
-    const d = es('ert_bil_eur_d', { statinfo: 'AVG', unit: 'NAC', currency: FX_CODES, sinceTimePeriod: start });
-    const q = ['format=JSON'];
-    Object.keys(d.params).forEach(function (k) { [].concat(d.params[k]).forEach(function (v) { q.push(k + '=' + v); }); });
-    return getJson(ESTAT + d.code + '?' + q.join('&'), 40000).then(function (j) {
+  };
+  const fromEurostat = function () {
+    const q = ['format=JSON', 'statinfo=AVG', 'unit=NAC', 'sinceTimePeriod=' + start].concat(FX_CODES.map(function (c) { return 'currency=' + c; }));
+    return getJson(ESTAT + 'ert_bil_eur_d?' + q.join('&'), 30000).then(function (j) {
       const ids = j.id, ci = ids.indexOf('currency'), ti = ids.indexOf('time');
       const cur = [], tt = [];
       Object.keys(j.dimension.currency.category.index).forEach(function (k) { cur[j.dimension.currency.category.index[k]] = k; });
@@ -172,10 +182,19 @@ function fetchFx() {
       const keep = tt.map(function (_, i) { return cur.some(function (c) { return typeof s[c][i] === 'number'; }); });
       const t = tt.filter(function (_, i) { return keep[i]; });
       cur.forEach(function (c) { s[c] = s[c].filter(function (_, i) { return keep[i]; }); });
-      if (t.length < 50) throw new Error('short series');
-      return { t: t, s: s, upd: t[t.length - 1], via: 'Eurostat' };
+      if (t.length < 50 || FX_CODES.some(function (c) { return !s[c]; })) throw new Error('short series');
+      return { t: t, s: s, upd: t[t.length - 1], via: 'Eurostat (ECB reference rates)' };
     });
-  });
+  };
+  const fromMirror = function () {
+    return getJson(FRANK + start + '..?base=EUR&symbols=' + FX_CODES.join(','), 20000).then(function (j) {
+      const t = Object.keys(j.rates).sort(), s = {};
+      FX_CODES.forEach(function (c) { s[c] = t.map(function (d) { const v = j.rates[d][c]; return typeof v === 'number' ? v : null; }); });
+      if (t.length < 50) throw new Error('short series');
+      return { t: t, s: s, upd: t[t.length - 1], via: 'frankfurter.dev (ECB reference rates)' };
+    });
+  };
+  return firstOf([fromEcb, fromEurostat, fromMirror], 4000);
 }
 
 function parseEcbCsv(csv) {

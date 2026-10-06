@@ -15,17 +15,18 @@ const items = STRATEGIES.filter(s => s.src).map(s => ({ id: s.id, title: s.src[0
   .concat(LEVERS.filter(l => l.ref && l.ref[1]).map(l => ({ id: 'lever:' + l.k, title: l.ref[0], url: l.ref[1] })))
   .concat([{ id: 'reference_values', title: REFERENCE_VALUES[1], url: REFERENCE_VALUES[2] }]);
 
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const norm = s => s.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')
   .replace(/&nbsp;|&#160;|&#xA0;/gi, ' ').replace(/&amp;/g, '&').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
   .replace(/&[a-z]+;/gi, ' ').replace(/[‘’“”'"`]/g, '').replace(/[‐-―]/g, '-').replace(/\s*([(),.;:%])\s*/g, '$1').replace(/\s+/g, ' ').toLowerCase().trim();
 async function get(url, headers) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 60000);
   try {
-    const r = await fetch(url, { headers: Object.assign({ 'User-Agent': 'Mozilla/5.0' }, headers || {}), signal: ctl.signal, redirect: 'follow' });
+    const r = await fetch(url, { headers: Object.assign({ 'User-Agent': UA }, headers || {}), signal: ctl.signal, redirect: 'follow' });
     if (r.status === 300) { // a document in several parts: read them all
       const parts = [...(await r.text()).matchAll(/href="(https?:\/\/publications\.europa\.eu\/resource\/cellar\/[^"]+)"/g)].map(m => m[1].replace(/^http:/, 'https:'));
       let all = '';
-      for (const u of parts.slice(0, 4)) { const rr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ctl.signal }); if (rr.ok) all += await rr.text(); }
+      for (const u of parts.slice(0, 4)) { const rr = await fetch(u, { headers: { 'User-Agent': UA }, signal: ctl.signal }); if (rr.ok) all += await rr.text(); }
       return all;
     }
     return r.ok ? await r.text() : '';
@@ -78,23 +79,34 @@ for (const c of Object.keys(status).sort()) if (status[c][2] > REVIEWED_ISO) con
 const noStatus = ids.filter(c => !status[c]); if (noStatus.length) console.log('  no status returned for:', noStatus.join(', '));
 
 // 2. Is the recorded passage in the official text?
-let ok = 0; const bad = [], unreachable = [], noQuote = [], pdf = [];
+// An entry in legal-quotes.json is normally the passage itself. Where the source cannot be read
+// automatically (a PDF, or a site that refuses automated requests) the entry is
+// { quote, confirmed: 'YYYY-MM-DD', how } recording when and how a person confirmed it.
+let ok = 0; const bad = [], unreachable = [], noQuote = [], byHand = [], overdue = [];
 for (const it of items) {
-  const q = quotes[it.id];
-  if (!q) { noQuote.push(it.id); continue; }
-  if (/\.pdf(\?|$)|filename=[^&]*\.pdf/i.test(it.url)) { pdf.push(it.id + ' <' + it.url + '>'); continue; }
-  const text = await officialText(it.url);
-  if (text.length <= 800) { unreachable.push(it.id + ' <' + it.url + '>'); continue; }
-  const hay = norm(text), needle = norm(q).replace(/[.,;:]+$/, '');
-  // Accept the whole passage, or at least two of three long pieces of it (start, middle, end):
-  // official texts differ from the recorded passage in footnote marks, line breaks and lead-in words.
-  const n = needle.length, mid = Math.max(0, Math.floor(n / 2) - 30);
-  const pieces = [needle.slice(0, 60), needle.slice(mid, mid + 60), needle.slice(Math.max(0, n - 60))];
-  if (hay.includes(needle) || (n > 90 && pieces.filter(p => hay.includes(p)).length >= 2) || (n <= 90 && hay.includes(needle.slice(Math.max(0, n - 45))))) ok++;
-  else bad.push(it.id + ' <' + it.url + '>\n      recorded passage: ' + q.slice(0, 110));
+  const entry = quotes[it.id];
+  if (!entry) { noQuote.push(it.id); continue; }
+  const q = typeof entry === 'string' ? entry : entry.quote;
+  const isPdf = /\.pdf(\?|$)|filename=[^&]*\.pdf/i.test(it.url);
+  const text = isPdf ? '' : await officialText(it.url);
+  if (text.length > 800) {
+    const hay = norm(text), needle = norm(q).replace(/[.,;:]+$/, '');
+    // Accept the whole passage, or at least two of three long pieces of it (start, middle, end):
+    // official texts differ from the recorded passage in footnote marks, line breaks and lead-in words.
+    const n = needle.length, mid = Math.max(0, Math.floor(n / 2) - 30);
+    const pieces = [needle.slice(0, 60), needle.slice(mid, mid + 60), needle.slice(Math.max(0, n - 60))];
+    if (hay.includes(needle) || (n > 90 && pieces.filter(p => hay.includes(p)).length >= 2) || (n <= 90 && hay.includes(needle.slice(Math.max(0, n - 45))))) { ok++; continue; }
+    if (typeof entry === 'string') { bad.push(it.id + ' <' + it.url + '>\n      recorded passage: ' + q.slice(0, 110)); continue; }
+  }
+  if (typeof entry === 'object' && entry.confirmed) {
+    byHand.push(it.id + ' (' + entry.how + ', ' + entry.confirmed + ')');
+    if (Date.parse(today) - Date.parse(entry.confirmed) > 365 * 86400000) overdue.push(it.id);
+  } else unreachable.push(it.id + ' <' + it.url + '>');
 }
-console.log('\nPassage found in the official text:', ok, 'of', items.length - noQuote.length - pdf.length, 'notes with a recorded passage in a web text');
+console.log('\nPassage found in the official text by this check:', ok, 'of', items.length, 'sourced notes');
+if (byHand.length) console.log('  confirmed by reading, because the source cannot be read automatically:\n    ' + byHand.join('\n    '));
+if (overdue.length) console.log('  HAND CONFIRMATION OVER A YEAR OLD, read again:', overdue.join(', '));
 if (bad.length) console.log('  NOT FOUND:\n    ' + bad.join('\n    '));
-if (pdf.length) console.log('  PDF sources, to be confirmed by reading the document:\n    ' + pdf.join('\n    '));
 if (unreachable.length) console.log('  source could not be opened:\n    ' + unreachable.join('\n    '));
-console.log('  no passage recorded (general statements):', noQuote.join(', ') || 'none');
+if (noQuote.length) console.log('  no passage recorded:', noQuote.join(', '));
+if (bad.length || unreachable.length || noQuote.length || overdue.length) process.exitCode = 1;

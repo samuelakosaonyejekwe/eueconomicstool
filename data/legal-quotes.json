@@ -13,7 +13,11 @@
  "market": "The provision of food and/or basic material assistance to the most deprived persons should not replace existing social benefits provided to them under national social systems or pursuant to national law.",
  "relief": "To limit the risk of fuelling inflation, fiscal support measures to shield the economy from the impact of high energy prices should be temporary and targeted at the most vulnerable.",
  "tiered": "shall not affect the right of Member States to define the fundamental principles of their social security systems and must not significantly affect the financial equilibrium thereof",
- "taxrelief": "A consistent application of the new rules requires that higher revenue from the non - indexation of income tax brackets to price developments is identified as a measure, regardless of the indexation regime.",
+ "taxrelief": {
+  "quote": "A consistent application of the new rules requires that higher revenue from the non - indexation of income tax brackets to price developments is identified as a measure, regardless of the indexation regime.",
+  "confirmed": "2026-10-06",
+  "how": "PDF document; read in the file, section II.3.5"
+ },
  "debt": "Member States shall adopt measures to encourage creditors to exercise reasonable forbearance before foreclosure proceedings are initiated.",
  "health": "Union action shall respect the responsibilities of the Member States for the definition of their health policy and for the organisation and delivery of health services and medical care.",
  "reserves": "correspond, at the very least, to 90 days of average daily net imports or 61 days of average daily inland consumption, whichever of the two quantities is greater",
@@ -56,7 +60,7 @@
  "pool": "The ECU was composed of a basket of currencies of the European Communities Member States",
  "swf": "financial transactions, as, for example, the acquisition of financial assets or the repayment of debt, which do not directly affect the government deficit.",
  "spectax": "In the 2026 Commission work programme, the Commission indicated its intention to withdraw the proposal due to the lack of progress in the legislative process.",
- "citizenhedge": "emisiunilor de titluri de stat, denominate în lei şi euro, lansate în perioada 02 - 09 octombrie 2026, în baza Prospectului de bază pentru Programul FIDELIS de emisiuni de titluri de stat destinate exclusiv investitorilor persoane fizice",
+ "citizenhedge": "titluri de stat, denominate în lei şi euro",
  "ratefx": "Functional independence requires each NCB’s primary objective to be stated in a clear and legally certain way and to be fully in line with the primary objective of price stability established by the Treaty.",
  "fdi": "‘qualified refundable tax credit’ means: (a) a refundable tax credit designed in such a way that it is to be paid as a cash payment or a cash equivalent to a constituent entity within four years",
  "ppp": "The EU guarantee for the purposes of the EU compartment referred to in point (a) of Article 9(1) shall be EUR 26 152 310 073 in current prices.",
@@ -75,5 +79,15 @@
  "lever:wageIdx": "Automatic wage indexation applies to a large share of private sector employees in Belgium, Cyprus, Malta and Luxembourg.",
  "lever:vatLux": "Member States shall apply a standard rate of VAT, which shall be fixed by each Member State as a percentage of the taxable amount and which shall be the same for the supply of goods and for the supply of services.",
  "lever:rate": "neither the European Central Bank, nor a national central bank, nor any member of their decision-making bodies shall seek or take instructions from Union institutions, bodies, offices or agencies, from any government of a Member State or from any other body",
- "reference_values": "3 % for the ratio of the planned or actual government deficit to gross domestic product at market prices"
+ "reference_values": "3 % for the ratio of the planned or actual government deficit to gross domestic product at market prices",
+ "pricewatch": "Die Markttransparenzstelle für Kraftstoffe ermöglicht es Verbraucherinnen und Verbrauchern, sich jederzeit über die aktuellen Kraftstoffpreise an allen Tankstellen in",
+ "ledger": "Horizontal cooperation can, for instance, lead to the disclosure of commercially sensitive information, thereby increasing the likelihood of coordination between the parties",
+ "retailfc": "It is the world’s largest support network for small and medium-sized enterprises (SMEs) with international ambitions.",
+ "literacy": "The Commission and OECD-INFE publish a joint framework for adults to improve individuals’ financial skills",
+ "lever:bonds": "BTP Italia Sì: the new government bond protecting against the national inflation rate is here",
+ "ciap": {
+  "quote": "Le Gouvernement a trouvé un accord, lundi 6 mars 2023, avec la grande distribution qui s'est engagée à mettre en place un « trimestre anti-inflation »",
+  "confirmed": "2026-10-06",
+  "how": "the page refuses automated requests; read in a browser"
+ }
 }

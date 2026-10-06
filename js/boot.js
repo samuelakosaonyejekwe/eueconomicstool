@@ -49,7 +49,7 @@ export async function run(base) {
     // An older copy is already on screen. If this is the newest version, now fully downloaded, move to it.
     sheet.remove();
     const mine = (base.match(SHA) || [])[1];
-    if (mine && !SHA.test(window.__escClaim)) quietSwitch(mine);
+    if (mine && !SHA.test(window.__escClaim) && !quietSwitch(mine)) { window.__escUpdate = true; window.dispatchEvent(new Event('esc-update')); }
     return;
   }
   window.__escClaim = base;

@@ -21,7 +21,7 @@ Each visitor's browser fetches the figures directly from the publishers' open AP
 
 - Eurostat dissemination API (prices, labour market, national accounts, public finances, balance of payments, energy)
 - European Central Bank Data Portal (key interest rate, reference exchange rates)
-- frankfurter.dev (ECB reference exchange rates; first of three routes, then the ECB Data Portal, then Eurostat)
+- For exchange rates, two fallback routes if the ECB service does not answer: Eurostat's copy of the reference rates, then frankfurter.dev
 
 There is no private server. `data/snapshot.json` is a bundled baseline shown on a first visit until the live fetch completes; refresh it with `node tools/snapshot.mjs`.
 
