@@ -272,6 +272,18 @@ export const STRATEGIES = [
 
 // The official source behind each EU note, and the date the notes were last checked against them.
 export const REVIEWED = '6 October 2026';
+export const REVIEWED_ISO = '2026-10-06';
+// The EU document number (CELEX) behind an official address, without any consolidation date,
+// e.g. '32014R0651'. Empty for sources that are not EU legal acts.
+export function celexOf(url) {
+  let m = /CELEX:([^&]+)/.exec(url || '');
+  let id = m ? decodeURIComponent(m[1]) : '';
+  if (!id) {
+    m = /\/eli\/(reg|dir|dec)\/(\d{4})\/(\d+)\//.exec(url || '');
+    if (m) id = '3' + m[2] + { reg: 'R', dir: 'L', dec: 'D' }[m[1]] + ('000' + m[3]).slice(-4);
+  }
+  return /^0\d{4}[A-Z]\d{4}-/.test(id) ? '3' + id.slice(1, 10) : id;
+}
 export const SOURCES = {
  "ews": [
   "Eurostat HICP reference metadata",
@@ -371,7 +383,7 @@ export const SOURCES = {
  ],
  "dssip": [
   "Clean Industrial Deal State Aid Framework (C/2025/3602)",
-  "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:C_202503602"
+  "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52025XC03602"
  ],
  "agri": [
   "Regulation (EU) 2021/2116, Article 16",
@@ -563,6 +575,22 @@ export const SOURCES = {
  ]
 };
 STRATEGIES.forEach(function (x) { x.src = SOURCES[x.id] || null; });
+
+// Document numbers of every EU regulation or directive named in a note's own text, e.g.
+// 'Regulation (EU) No 651/2014' -> '32014R0651', 'Directive (EU) 2022/542' -> '32022L0542'.
+export function actsIn(text) {
+  const out = [], re = /(Regulation|Directive) \((?:EU|EC|EEC)\) (?:No )?(\d+)\/(\d+)/g;
+  let m;
+  while ((m = re.exec(text || ''))) {
+    const a = m[2], b = m[3], year = a.length === 4 && +a > 1950 ? a : b, num = year === a ? b : a;
+    const id = '3' + year + (m[1] === 'Regulation' ? 'R' : 'L') + ('000' + num).slice(-4);
+    if (out.indexOf(id) < 0) out.push(id);
+  }
+  // older directives are written the other way round: 'Directive 2009/119/EC'
+  const old = /Directive (\d{4})\/(\d+)\/(?:EC|EU|EEC)/g;
+  while ((m = old.exec(text || ''))) { const id = '3' + m[1] + 'L' + ('000' + m[2]).slice(-4); if (out.indexOf(id) < 0) out.push(id); }
+  return out;
+}
 
 export const CATEGORIES = STRATEGIES.reduce(function (a, s) { if (a.indexOf(s.cat) < 0) a.push(s.cat); return a; }, []);
 

@@ -25,6 +25,10 @@ Each visitor's browser fetches the figures directly from the publishers' open AP
 
 There is no private server. `data/snapshot.json` is a bundled baseline shown on a first visit until the live fetch completes; refresh it with `node tools/snapshot.mjs`.
 
+## Legal notes and evidence
+
+Every EU legal note links to the official text it rests on, and every simulator coefficient links to the studies behind it. `node tools/check-sources.mjs` re-checks them: it confirms that the passage recorded for each note (`data/legal-quotes.json`) appears in the official text, and reads each cited act's in-force status and last day of application from the EU Publications Office database into `js/legal-status.js`. The tool uses those dates to flag a note by itself once its act stops applying. Run the check before each release; update the review date in `js/strategies.js` only after re-reading the notes.
+
 ## Install and offline use
 
 The tool is a progressive web app. Use the **Install app** button, or the browser's "Install" / "Add to Home Screen" option. After the first visit it opens and works without a connection, showing the last figures it fetched.

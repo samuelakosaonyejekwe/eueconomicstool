@@ -5,7 +5,7 @@
 const CACHE = 'esc-v3';
 const CDN = 'https://cdn.jsdelivr.net/gh/samuelakosaonyejekwe/eueconomicstool@';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/boot.js', 'js/app.js', 'js/shell.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js',
-  'js/strategies.js', 'js/method.js', 'data/snapshot.json', 'manifest.webmanifest', 'mirrors.json',
+  'js/strategies.js', 'js/legal-status.js', 'js/method.js', 'data/snapshot.json', 'manifest.webmanifest', 'mirrors.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'];
 
 self.addEventListener('install', function (e) {

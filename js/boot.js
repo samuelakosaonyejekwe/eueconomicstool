@@ -1,7 +1,7 @@
 // Start-up and self-update. The page's small loader imports this file from the
 // newest published commit and calls run(). Everything about how the tool starts
 // and keeps itself current lives here, so it can change without touching the loader.
-const FILES = ['js/app.js', 'js/shell.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js', 'js/strategies.js', 'js/method.js'];
+const FILES = ['js/app.js', 'js/shell.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js', 'js/strategies.js', 'js/legal-status.js', 'js/method.js'];
 const MIN = 60000;
 const started = Date.now();
 let touched = false, lastTry = 0;

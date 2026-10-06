@@ -101,7 +101,7 @@ export function lineChart(el, o) {
   }).filter(Boolean).join('. ');
   const rowsIdx = [];
   for (let i = n - 1; i >= 0 && rowsIdx.length < 36; i--) if (o.series.some(function (s) { return num(s.values[i]); })) rowsIdx.push(i);
-  const tbl = '<details class="astable"><summary>Show as table</summary><div class="tw"><table><caption>' + esc(o.label || 'Chart data') + (rowsIdx.length < n ? ', latest ' + rowsIdx.length + ' periods' : '') +
+  const tbl = '<details class="astable" aria-label="Chart data as a table"><summary>Show as table</summary><div class="tw"><table><caption>' + esc(o.label || 'Chart data') + (rowsIdx.length < n ? ', latest ' + rowsIdx.length + ' periods' : '') +
     '</caption><thead><tr><th scope="col">Period</th>' + o.series.map(function (s) { return '<th scope="col">' + esc(s.name) + '</th>'; }).join('') + '</tr></thead><tbody>' +
     rowsIdx.map(function (i) { return '<tr><th scope="row">' + periodLabel(o.t[i]) + '</th>' + o.series.map(function (s) { return '<td>' + (num(s.values[i]) ? fmt(s.values[i], vdp) + unit : '–') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details>';
   const wasOpen = el.querySelector('details[open]');
@@ -159,7 +159,7 @@ export function barList(rows, o) {
   return '<div class="bars' + ((o.unit || '').length > 1 ? ' wide' : '') + '">' + rows.map(function (r) {
     if (!num(r.value)) return '<div class="bar-row mute"' + (r.code ? ' data-country="' + r.code + '"' : '') + '><span class="bl">' + esc(r.label) + '</span><span class="bt"></span><span class="bv">–</span></div>';
     const w = Math.abs(r.value) / span * 100, left = r.value >= 0 ? zero : zero - w;
-    return '<div class="bar-row' + (r.hl ? ' hl' : '') + (r.agg ? ' agg' : '') + '"' + (r.code ? ' data-country="' + r.code + '" tabindex="0" role="button"' : '') + ' title="' + esc(r.label) + ': ' + fmt(r.value, o.dp) + (o.unit || '') + '">' +
+    return '<div class="bar-row' + (r.hl ? ' hl' : '') + (r.agg ? ' agg' : '') + '"' + (r.code ? ' data-country="' + r.code + '" tabindex="0" role="button"' : '') + '>' +
       '<span class="bl">' + esc(r.label) + '</span><span class="bt"><i class="' + (r.value < 0 ? 'neg' : '') + '" style="left:' + left.toFixed(2) + '%;width:' + Math.max(w, 0.6).toFixed(2) + '%"></i>' +
       (refx !== null ? '<u style="left:' + refx.toFixed(2) + '%"></u>' : '') + '</span><span class="bv">' + fmt(r.value, o.dp) + (o.unit || '') + '</span></div>';
   }).join('') + '</div>' + (refx !== null && o.refLabel ? '<p class="note"><u class="refkey"></u> ' + esc(o.refLabel) + '</p>' : '');
@@ -167,8 +167,8 @@ export function barList(rows, o) {
 
 // 0–100 meter with a status label.
 export function meter(score, label) {
-  if (!num(score)) return '<div class="meter na"><span class="track"><i style="width:0"></i></span><b>n/a</b><em>Not published</em></div>';
+  if (!num(score)) return '<div class="meter na"><span class="track"><i style="width:0"></i></span><b>n/a</b><span class="lv">Not published</span></div>';
   const tone = label === 'High' ? 'crit' : label === 'Moderate' ? 'warn' : 'good';
-  return '<div class="meter ' + tone + '"><span class="track" aria-hidden="true"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '<span class="sr"> out of 100,</span></b><em>' + esc(label) + '</em></div>';
+  return '<div class="meter ' + tone + '"><span class="track" aria-hidden="true"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '<span class="sr"> out of 100,</span></b><span class="lv">' + esc(label) + '</span></div>';
 }
 export { esc };
