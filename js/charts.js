@@ -13,7 +13,8 @@ function niceTicks(lo, hi, n) {
   const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), r = raw / mag;
   const stepv = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag;
   const out = [];
-  for (let v = Math.floor(lo / stepv) * stepv; v <= hi + stepv * 0.5; v += stepv) out.push(Math.abs(v) < 1e-9 ? 0 : v);
+  const first = Math.floor(lo / stepv + 1e-9) * stepv, count = Math.ceil((hi - first) / stepv - 1e-9);
+  for (let i = 0; i <= count; i++) { const v = first + i * stepv; out.push(Math.abs(v) < 1e-9 ? 0 : v); } // last tick is at or above the largest value
   out.dp = Math.max(0, -Math.floor(Math.log(stepv) / Math.LN10 + 1e-9)); // decimals needed so neighbouring ticks never read the same
   return out;
 }
@@ -42,15 +43,16 @@ function xTicks(t, maxN) {
          band: { from, lo: [], hi: [] }, height, dp, label } */
 export function lineChart(el, o) {
   if (!el) return;
-  const W = Math.max(280, el.clientWidth || 600), Hh = o.height || 260;
-  const m = { l: 40, r: 14, t: 12, b: 26 }, iw = W - m.l - m.r, ih = Hh - m.t - m.b;
+  const W = el.printWidth || Math.max(280, el.clientWidth || 600), Hh = el.printWidth ? Math.min(o.height || 260, 240) : o.height || 260;
+  const refs = o.refs || [], longest = refs.reduce(function (a, r) { return Math.max(a, r.label.length); }, 0);
+  const m = { l: 40, r: refs.length ? Math.min(96, 12 + longest * 5.8) : 14, t: 12, b: 26 }, iw = W - m.l - m.r, ih = Hh - m.t - m.b;
   const n = o.t.length;
   let lo = Infinity, hi = -Infinity;
   o.series.forEach(function (s) { s.values.forEach(function (v) { if (num(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } }); });
   if (o.band) o.band.lo.concat(o.band.hi).forEach(function (v) { if (num(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } });
   (o.refs || []).forEach(function (r) { if (r.y < lo) lo = r.y; if (r.y > hi) hi = r.y; });
   if (!isFinite(lo)) { el.innerHTML = '<p class="empty">No data available for this selection.</p>'; return; }
-  const pad = (hi - lo) * 0.06 || 0.5;
+  const pad = (hi - lo) * 0.04 || 0.5;
   const ticks = niceTicks(lo - pad, hi + pad, 4);
   lo = ticks[0]; hi = ticks[ticks.length - 1];
   const X = function (i) { return m.l + (n > 1 ? i / (n - 1) : 0.5) * iw; };
@@ -65,8 +67,8 @@ export function lineChart(el, o) {
     g += '<text class="tick" x="' + X(k.i).toFixed(1) + '" y="' + (Hh - 7) + '" text-anchor="middle">' + k.l + '</text>';
   });
   (o.refs || []).forEach(function (r) {
-    g += '<line class="ref" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(r.y).toFixed(1) + '" y2="' + Y(r.y).toFixed(1) + '"/>' +
-      '<text class="reflab" x="' + (W - m.r - 2) + '" y="' + (Y(r.y) - 4).toFixed(1) + '" text-anchor="end">' + esc(r.label) + '</text>';
+    g += '<line class="ref" x1="' + m.l + '" x2="' + (W - m.r + 4) + '" y1="' + Y(r.y).toFixed(1) + '" y2="' + Y(r.y).toFixed(1) + '"/>' +
+      '<text class="reflab" x="' + (W - m.r + 7) + '" y="' + (Y(r.y) + 3.5).toFixed(1) + '">' + esc(r.label) + '</text>';
   });
   if (o.band) {
     let up = '', dn = '';
@@ -90,8 +92,22 @@ export function lineChart(el, o) {
   const legend = o.series.length > 1 ? '<div class="legend">' + o.series.map(function (s) {
     return '<span><i style="background:var(--s' + s.color + ')"' + (s.dash ? ' class="dash"' : '') + '></i>' + esc(s.name) + '</span>';
   }).join('') + '</div>' : '';
-  el.innerHTML = legend + '<div class="plot"><svg viewBox="0 0 ' + W + ' ' + Hh + '" width="' + W + '" height="' + Hh + '" role="img" aria-label="' + esc(o.label || 'Line chart') + '">' + g +
-    '</svg><div class="tip" hidden></div></div>';
+  // Text alternative: a one-line summary for screen readers and a table anyone can open.
+  const vdp = o.dp === undefined ? 1 : o.dp, unit = o.unit || '';
+  const lastIdx = function (v) { for (let i = v.length - 1; i >= 0; i--) if (num(v[i])) return i; return -1; };
+  const summary = o.series.map(function (s) {
+    const i = lastIdx(s.values), v = s.values.filter(num);
+    return i < 0 ? '' : s.name + ': ' + fmt(s.values[i], vdp) + unit + ' in ' + periodLabel(o.t[i]) + ', range ' + fmt(Math.min.apply(null, v), vdp) + ' to ' + fmt(Math.max.apply(null, v), vdp) + unit;
+  }).filter(Boolean).join('. ');
+  const rowsIdx = [];
+  for (let i = n - 1; i >= 0 && rowsIdx.length < 36; i--) if (o.series.some(function (s) { return num(s.values[i]); })) rowsIdx.push(i);
+  const tbl = '<details class="astable"><summary>Show as table</summary><div class="tw"><table><caption>' + esc(o.label || 'Chart data') + (rowsIdx.length < n ? ', latest ' + rowsIdx.length + ' periods' : '') +
+    '</caption><thead><tr><th scope="col">Period</th>' + o.series.map(function (s) { return '<th scope="col">' + esc(s.name) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    rowsIdx.map(function (i) { return '<tr><th scope="row">' + periodLabel(o.t[i]) + '</th>' + o.series.map(function (s) { return '<td>' + (num(s.values[i]) ? fmt(s.values[i], vdp) + unit : '–') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details>';
+  const wasOpen = el.querySelector('details[open]');
+  el.innerHTML = legend + '<div class="plot"><svg viewBox="0 0 ' + W + ' ' + Hh + '" width="' + W + '" height="' + Hh + '" role="img" aria-label="' + esc((o.label || 'Line chart') + '. ' + summary) + '">' + g +
+    '</svg><div class="tip" hidden></div></div>' + tbl;
+  if (wasOpen) el.querySelector('details').open = true;
   const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), cross = el.querySelector('.cross'), dots = el.querySelector('.dots');
   const move = function (ev) {
     const pt = ev.touches ? ev.touches[0] : ev, box = svg.getBoundingClientRect();
@@ -143,7 +159,7 @@ export function barList(rows, o) {
   return '<div class="bars' + ((o.unit || '').length > 1 ? ' wide' : '') + '">' + rows.map(function (r) {
     if (!num(r.value)) return '<div class="bar-row mute"' + (r.code ? ' data-country="' + r.code + '"' : '') + '><span class="bl">' + esc(r.label) + '</span><span class="bt"></span><span class="bv">–</span></div>';
     const w = Math.abs(r.value) / span * 100, left = r.value >= 0 ? zero : zero - w;
-    return '<div class="bar-row' + (r.hl ? ' hl' : '') + (r.agg ? ' agg' : '') + '"' + (r.code ? ' data-country="' + r.code + '" tabindex="0" role="link"' : '') + ' title="' + esc(r.label) + ': ' + fmt(r.value, o.dp) + (o.unit || '') + '">' +
+    return '<div class="bar-row' + (r.hl ? ' hl' : '') + (r.agg ? ' agg' : '') + '"' + (r.code ? ' data-country="' + r.code + '" tabindex="0" role="button"' : '') + ' title="' + esc(r.label) + ': ' + fmt(r.value, o.dp) + (o.unit || '') + '">' +
       '<span class="bl">' + esc(r.label) + '</span><span class="bt"><i class="' + (r.value < 0 ? 'neg' : '') + '" style="left:' + left.toFixed(2) + '%;width:' + Math.max(w, 0.6).toFixed(2) + '%"></i>' +
       (refx !== null ? '<u style="left:' + refx.toFixed(2) + '%"></u>' : '') + '</span><span class="bv">' + fmt(r.value, o.dp) + (o.unit || '') + '</span></div>';
   }).join('') + '</div>' + (refx !== null && o.refLabel ? '<p class="note"><u class="refkey"></u> ' + esc(o.refLabel) + '</p>' : '');
@@ -151,8 +167,8 @@ export function barList(rows, o) {
 
 // 0–100 meter with a status label.
 export function meter(score, label) {
-  if (!num(score)) return '<div class="meter na"><span class="track"><i style="width:0"></i></span><b>n/a</b></div>';
+  if (!num(score)) return '<div class="meter na"><span class="track"><i style="width:0"></i></span><b>n/a</b><em>Not published</em></div>';
   const tone = label === 'High' ? 'crit' : label === 'Moderate' ? 'warn' : 'good';
-  return '<div class="meter ' + tone + '"><span class="track"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '</b><em>' + esc(label) + '</em></div>';
+  return '<div class="meter ' + tone + '"><span class="track" aria-hidden="true"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '<span class="sr"> out of 100,</span></b><em>' + esc(label) + '</em></div>';
 }
 export { esc };

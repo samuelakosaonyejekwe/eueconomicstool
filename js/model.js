@@ -228,55 +228,242 @@ export function personal(D, c, shares) {
 // so the published assumptions cannot drift from the calculation. Triples are
 // [low, central, high].
 export const K = {
-  vatCut: [0.30, 0.60, 0.90], taxRise: [0.60, 0.80, 1.00], energyPass: [0.80, 1.00, 1.00], energyFloor: 5,
-  demand: [0.05, 0.15, 0.30], spendTransfer: 0.70, bondDivert: 0.40,
-  reserve: [0.3, 0.8, 1.5], reserveBase: 0.30, reserveCarry: 0.02,
-  supply: [0, 0.10, 0.25], supplyDemand: 0.50, wage: [0.05, 0.15, 0.30],
-  rate: [0.10, 0.30, 0.50], rateGdp: [0.20, 0.40, 0.60],
-  lowShare: 0.15, gdpTransfer: 0.5, gdpSupply: 0.3, gdpBonds: 0.2, gdpTax: 0.3, consumptionDefault: 52
+  vatCut: [0.45, 0.75, 1.00], taxRise: [0.35, 0.80, 1.00], energyPass: [0.50, 0.85, 1.00], energyFloor: 5,
+  demand: [0.03, 0.10, 0.30], spendTransfer: 0.55, bondDivert: 0.05,
+  reserve: [0.1, 0.8, 1.5], reserveBase: 0.30, reserveCarry: 0.02,
+  supply: [0, 0, 0.10], supplyDemand: 0.50, wage: [0.05, 0.15, 0.30],
+  rate: [0.10, 0.30, 0.70], rateGdp: [0.20, 0.40, 0.80],
+  lowShare: 0.20, gdpTransfer: 0.6, gdpSupply: 0.8, gdpBonds: 0.05, gdpTax: 0.3, consumptionDefault: 53
 };
 const f2 = function (x) { return x.toFixed(2); };
 const rng = function (t, unit, sign) { return (sign || '') + f2(t[0]) + ' – ' + (sign || '') + f2(t[2]) + (unit || ''); };
+// Each row: [assumption, central value, range used, what the evidence says]. The published
+// studies behind each row are attached from EVIDENCE below.
 export const ASSUMPTIONS = [
-  ['VAT cut pass-through to shelf prices', f2(K.vatCut[1]), rng(K.vatCut), 'Cuts are passed on less fully than increases.'],
-  ['Consumption-tax increase pass-through', f2(K.taxRise[1]), rng(K.taxRise), ''],
-  ['Energy support pass-through to consumer bills', f2(K.energyPass[1]), rng(K.energyPass), 'Applied only to energy inflation above ' + K.energyFloor + '%.'],
-  ['Inflation response to a demand change of 1% of GDP', f2(K.demand[1]) + ' pp', rng(K.demand, ' pp'), 'First-year effect; flatter or steeper price response at the ends of the range.'],
-  ['Share of a targeted transfer that is spent', f2(K.spendTransfer), '—', 'Low-income households spend most of an extra euro.'],
-  ['Share of retail-bond purchases diverted from spending', f2(K.bondDivert), '—', 'The rest replaces other saving.'],
-  ['Strategic stock release: staple price fall per 1% of annual use released', f2(K.reserve[1]) + '%', rng(K.reserve, '%'), 'Applied to ' + Math.round(K.reserveBase * 100) + '% of the food and energy basket. Carrying cost ' + f2(K.reserveCarry) + '% of GDP per 1% released.'],
-  ['Supply-side incentives: first-year price fall per 1% of GDP', f2(K.supply[1]) + ' pp', rng(K.supply, ' pp'), 'Half of the outlay also adds to demand in year one. Most of the supply effect arrives later.'],
-  ['Wage indexation second-round effect', f2(K.wage[1]), rng(K.wage), 'Share of above-target inflation fed back, per unit of coverage.'],
-  ['Policy rate: inflation fall per +100 basis points', f2(K.rate[1]) + ' pp', rng(K.rate, ' pp'), 'Peak effect after 12–24 months.'],
-  ['Policy rate: GDP fall per +100 basis points', f2(K.rateGdp[1]) + '%', rng(K.rateGdp, '%'), ''],
-  ['Low-income households (bottom 30%) share of consumption', Math.round(K.lowShare * 100) + '%', '—', 'Used to express transfers as a share of their spending.'],
-  ['First-year GDP effect per 1% of GDP: transfers / supply incentives', '+' + f2(K.gdpTransfer) + '% / +' + f2(K.gdpSupply) + '%', '—', 'Simple multipliers.'],
-  ['First-year GDP effect per 1% of GDP: bond take-up / higher consumption tax', '−' + f2(K.gdpBonds) + '% / −' + f2(K.gdpTax) + '%', '—', 'Simple multipliers.'],
-  ['Household consumption as a share of GDP when not published', K.consumptionDefault + '%', '—', 'Otherwise the country’s own figure from Eurostat is used.']
+  ['Food VAT cut: share passed on to shelf prices', f2(K.vatCut[1]), rng(K.vatCut), 'Food VAT cuts in 2020–23 were largely passed on: about 70% in German supermarkets, almost fully in Spain and Portugal, and 44–58% at first in Poland, rising to about 95% within five months.'],
+  ['Consumption-tax increase: share passed on', f2(K.taxRise[1]), rng(K.taxRise), 'Standard-rate rises are passed on almost fully; reduced-rate changes and reversals of temporary cuts much less (about 30–50%).'],
+  ['Energy support: share reaching consumer bills', f2(K.energyPass[1]), rng(K.energyPass), 'Direct bill discounts and regulated caps pass through fully; tax-based support 75–100%. The threshold of ' + K.energyFloor + '% is a design choice of this tool. The price effect reverses when support ends: ECB staff put euro-area measures at −1.1 pp on inflation in 2022 and +0.7 pp in 2024.'],
+  ['Inflation response to a demand change of 1% of GDP', f2(K.demand[1]) + ' pp', rng(K.demand, ' pp'), 'First-year effect. ECB models give about 0.07 pp after two years for spending of 1% of GDP; the top of the range is the high-inflation case.'],
+  ['Share of a targeted transfer that is spent', f2(K.spendTransfer), '—', 'Euro-area surveys put the share spent at about 0.46 on average and about 0.59 for households with the least cash on hand. Range in the literature 0.40–0.80.'],
+  ['Share of retail-bond purchases diverted from spending', f2(K.bondDivert), '—', 'An assumption: no study measures it. Belgian and Italian retail issues in 2022–24 were financed almost entirely from bank deposits, not from spending. Plausible range 0–0.20.'],
+  ['Strategic stock release: staple price fall per 1% of annual use released', f2(K.reserve[1]) + '%', rng(K.reserve, '%'), 'A placeholder with a wide range: the only quantified episode is the 2022 coordinated oil release, itself based on assumed elasticities. One country acting alone moves prices far less. Applied to ' + Math.round(K.reserveBase * 100) + '% of the food and energy basket; lasts only while the release continues. Carrying cost ' + f2(K.reserveCarry) + '% of GDP per 1% released.'],
+  ['Supply-side incentives: first-year price fall per 1% of GDP', f2(K.supply[1]) + ' pp', rng(K.supply, ' pp'), 'ECB modelling of public investment and reforms finds no price fall in the first year; the supply benefit arrives later. Half of the outlay adds to demand in year one.'],
+  ['Wage indexation second-round effect', f2(K.wage[1]), rng(K.wage), 'Not estimated directly; consistent with ECB findings that wages pass about 50% into producer prices over three years. Automatic indexation covers only about 3% of euro-area private-sector employees.'],
+  ['Policy rate: inflation fall per +100 basis points', f2(K.rate[1]) + ' pp', rng(K.rate, ' pp'), 'A peak effect after 12–18 months, so the first-year effect is smaller. Derived from ECB staff estimates of the 2021–23 tightening.'],
+  ['Policy rate: GDP fall per +100 basis points', f2(K.rateGdp[1]) + '%', rng(K.rateGdp, '%'), 'ECB staff estimates; output responds earlier than inflation.'],
+  ['Low-income households (bottom 30%) share of consumption', Math.round(K.lowShare * 100) + '%', '—', 'Eurostat: the lowest income fifth accounts for 12.0% of household consumption in the EU and the second fifth for 16.0%.'],
+  ['First-year GDP effect per 1% of GDP: targeted transfers / supply incentives', '+' + f2(K.gdpTransfer) + '% / +' + f2(K.gdpSupply) + '%', '—', 'European Commission model: 0.66–0.89 for transfers targeted at cash-constrained households, about 0.9–1.1 for public investment.'],
+  ['First-year GDP effect per 1% of GDP: bond take-up / higher consumption tax', '−' + f2(K.gdpBonds) + '% / −' + f2(K.gdpTax) + '%', '—', 'Consumption-tax multipliers of 0.0–0.5 across fifteen European central bank models. The bond effect follows from the small share diverted from spending.'],
+  ['Household consumption as a share of GDP when not published', K.consumptionDefault + '%', '—', 'EU average in 2025: 52.8%. Otherwise the country’s own figure from Eurostat is used.']
 ];
+// Published studies and official statistics behind each assumption, in the same order.
+export const EVIDENCE = [
+ [
+  [
+   "Fuest, Neumeier, Stöhlker, The pass-through of temporary VAT rate cuts: evidence from German supermarket retail, International Tax and Public Finance, 2024",
+   "https://link.springer.com/article/10.1007/s10797-023-09824-7"
+  ],
+  [
+   "Banco de España, Documento de Trabajo 2417, Analysing the VAT cut pass-through in Spain using web-scraped supermarket data and machine learning, 2024",
+   "https://www.bde.es/f/webbe/SES/Secciones/Publicaciones/PublicacionesSeriadas/DocumentosTrabajo/24/Files/dt2417e.pdf"
+  ],
+  [
+   "Cutting VAT rate on food products in a high-inflation environment. Does it work out? (Poland 2022), Food Policy, 2025",
+   "https://www.sciencedirect.com/science/article/pii/S030691922500020X"
+  ]
+ ],
+ [
+  [
+   "Benedek, De Mooij, Keen, Wingender, Estimating VAT Pass Through, IMF Working Paper 15/214, 2015",
+   "https://www.imf.org/external/pubs/cat/longres.aspx?sk=43322.0"
+  ],
+  [
+   "Benzarti, Carloni, Harju, Kosonen, What Goes Up May Not Come Down: Asymmetric Incidence of Value-Added Taxes, NBER Working Paper 23849, 2017",
+   "https://www.nber.org/system/files/working_papers/w23849/w23849.pdf"
+  ],
+  [
+   "Fuest, Neumeier, Stöhlker, The pass-through of temporary VAT rate cuts: evidence from German supermarket retail, 2024",
+   "https://link.springer.com/article/10.1007/s10797-023-09824-7"
+  ]
+ ],
+ [
+  [
+   "ECB Economic Bulletin 1/2023, box on climate-related fiscal measures in the staff projections (reports the -1.1 pp / -0.5 pp / +0.7 pp / +0.4 pp HICP effect of energy compensation measures)",
+   "https://www.ecb.europa.eu/pub/economic-bulletin/focus/2023/html/ecb.ebbox202301_05~d8e33ee7ac.en.html"
+  ],
+  [
+   "Bańkowski, Bouabdallah, Checherita-Westphal, Freier, Jacquinot, Muggenthaler, Fiscal policy and high inflation, ECB Economic Bulletin 2/2023",
+   "https://www.ecb.europa.eu/press/economic-bulletin/articles/2023/html/ecb.ebart202302_01~2bd46eff8f.en.html"
+  ],
+  [
+   "Dovern et al., Estimating pass-through rates for the 2022 tax reduction on fuel prices in Germany, Energy Economics, 2023",
+   "https://www.sciencedirect.com/science/article/abs/pii/S0140988323004462"
+  ]
+ ],
+ [
+  [
+   "ECB Economic Bulletin 6/2025, Macroeconomic impacts of higher defence spending: a model-based assessment",
+   "https://www.ecb.europa.eu/press/economic-bulletin/articles/2025/html/ecb.ebart202506_01~d41c118e13.en.html"
+  ],
+  [
+   "Eser, Karadi, Lane, Moretti, Osbat, The Phillips Curve at the ECB, ECB Working Paper 2400, 2020",
+   "https://www.ecb.europa.eu/pub/pdf/scpwps/ecb.wp2400~6e8bfb6fd2.en.pdf"
+  ],
+  [
+   "Dao, Dizioli, Jackson, Gourinchas, Leigh, Unconventional Fiscal Policy in Times of High Inflation, IMF Working Paper 2023/178",
+   "https://www.imf.org/en/publications/wp/issues/2023/08/31/unconventional-fiscal-policy-in-times-of-high-inflation-537454"
+  ]
+ ],
+ [
+  [
+   "Albacete, Fessler, Pekanov, The role of MPC heterogeneity for fiscal and monetary policy in the euro area, SUERF Policy Brief 965, 2024",
+   "https://www.suerf.org/publications/suerf-policy-notes-and-briefs/the-role-of-mpc-heterogeneity-for-fiscal-and-monetary-policy-in-the-euro-area/"
+  ],
+  [
+   "Drescher, Fessler, Lindner, Helicopter money in Europe: New evidence on the marginal propensity to consume across European households, Economics Letters, 2020",
+   "https://www.sciencedirect.com/science/article/abs/pii/S0165176520302603"
+  ],
+  [
+   "Roeger and in 't Veld, Fiscal stimulus and exit strategies in the EU: a model-based analysis, European Economy Economic Papers 426, 2010 (Table 2)",
+   "https://ec.europa.eu/economy_finance/publications/economic_paper/2010/pdf/ecp426_en.pdf"
+  ]
+ ],
+ [
+  [
+   "National Bank of Belgium, Where did the EUR 22 billion released from the 2023 State note go?, blog, 2024",
+   "https://nbb.be/en/blog/where-did-eu22-billion-released-2023-state-note-go"
+  ],
+  [
+   "Colabella, Nunnari, Spadafora, Italian households' investments in sovereign securities in the post-pandemic period, Banca d'Italia Occasional Paper 987, 2025",
+   "https://ideas.repec.org/p/bdi/opques/qef_987_25.html"
+  ]
+ ],
+ [
+  [
+   "US Department of the Treasury, The Price Impact of the Strategic Petroleum Reserve Release, July 2022",
+   "https://home.treasury.gov/news/press-releases/jy0887"
+  ]
+ ],
+ [
+  [
+   "Bańkowski et al., The economic impact of Next Generation EU: a euro area perspective, ECB Occasional Paper 291, 2022",
+   "https://www.ecb.europa.eu/pub/pdf/scpops/ecb.op291~18b5f6e6a4.en.pdf"
+  ],
+  [
+   "ECB Economic Bulletin 6/2025, Macroeconomic impacts of higher defence spending: a model-based assessment",
+   "https://www.ecb.europa.eu/press/economic-bulletin/articles/2025/html/ecb.ebart202506_01~d41c118e13.en.html"
+  ]
+ ],
+ [
+  [
+   "Koester and Grapow, The prevalence of private sector wage indexation in the euro area and its potential role for the impact of inflation on wages, ECB Economic Bulletin 7/2021",
+   "https://www.ecb.europa.eu/press/economic-bulletin/focus/2021/html/ecb.ebbox202107_07~f555b70c47.en.html"
+  ],
+  [
+   "ECB Occasional Paper 371, A strategic view on the economic and inflation environment in the euro area, 2025 (wage-price pass-through, citing Ampudia et al. 2024)",
+   "https://www.ecb.europa.eu/pub/pdf/scpops/ecb.op371.en.pdf"
+  ],
+  [
+   "ECB Working Paper 3137, Inflation and monetary policy in medium-sized New Keynesian DSGE models, 2025",
+   "https://www.ecb.europa.eu/pub/pdf/scpwps/ecb.wp3137~e458bce069.en.pdf"
+  ]
+ ],
+ [
+  [
+   "Darracq Pariès, Motto, Montes-Galdón, Ristiniemi, Saint Guilhem, Zimic, A model-based assessment of the macroeconomic impact of the ECB's monetary policy tightening since December 2021, ECB Economic Bulletin 3/2023",
+   "https://www.ecb.europa.eu/press/economic-bulletin/focus/2023/html/ecb.ebbox202303_06~b2bdff5cda.en.html"
+  ],
+  [
+   "ECB Occasional Paper 372, Report on monetary policy tools, strategy and communication, 2025",
+   "https://www.ecb.europa.eu/pub/pdf/scpops/ecb.op372.en.pdf"
+  ],
+  [
+   "Zlobins, Monetary policy transmission in the euro area: is this time different?, 2025",
+   "https://www.ecb.europa.eu/pub/research-networks/shared/pdf/champ/20250808_Zlobins_paper.pdf"
+  ]
+ ],
+ [
+  [
+   "ECB Occasional Paper 344, ECB macroeconometric models for forecasting and policy analysis, 2024 (sacrifice ratio, Chart 18)",
+   "https://www.ecb.europa.eu/pub/pdf/scpops/ecb.op344~53b9e2aa4d.en.pdf"
+  ],
+  [
+   "Darracq Pariès et al., A model-based assessment of the macroeconomic impact of the ECB's monetary policy tightening since December 2021, ECB Economic Bulletin 3/2023",
+   "https://www.ecb.europa.eu/press/economic-bulletin/focus/2023/html/ecb.ebbox202303_06~b2bdff5cda.en.html"
+  ]
+ ],
+ [
+  [
+   "Eurostat, Share of households and economic resources by income, consumption and wealth quantiles - experimental statistics (icw_res_01)",
+   "https://ec.europa.eu/eurostat/databrowser/view/ICW_RES_01/default/table?lang=en"
+  ],
+  [
+   "Eurostat Statistics Explained, Joint distribution of household income, consumption and wealth - main indicators",
+   "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Joint_distribution_of_household_income%2C_consumption_and_wealth_-_main_indicators"
+  ]
+ ],
+ [
+  [
+   "Roeger and in 't Veld, Fiscal stimulus and exit strategies in the EU: a model-based analysis, European Economy Economic Papers 426, 2010 (Table 2)",
+   "https://ec.europa.eu/economy_finance/publications/economic_paper/2010/pdf/ecp426_en.pdf"
+  ],
+  [
+   "ECB Economic Bulletin 6/2025, Macroeconomic impacts of higher defence spending: a model-based assessment",
+   "https://www.ecb.europa.eu/press/economic-bulletin/articles/2025/html/ecb.ebart202506_01~d41c118e13.en.html"
+  ],
+  [
+   "Bańkowski et al., The economic impact of Next Generation EU: a euro area perspective, ECB Occasional Paper 291, 2022 (Box 5)",
+   "https://www.ecb.europa.eu/pub/pdf/scpops/ecb.op291~18b5f6e6a4.en.pdf"
+  ]
+ ],
+ [
+  [
+   "Kilponen et al., Comparing fiscal multipliers across models and countries in Europe, ECB Working Paper 1760, 2015",
+   "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1760.en.pdf"
+  ],
+  [
+   "Roeger and in 't Veld, Fiscal stimulus and exit strategies in the EU: a model-based analysis, European Economy Economic Papers 426, 2010 (Table 2)",
+   "https://ec.europa.eu/economy_finance/publications/economic_paper/2010/pdf/ecp426_en.pdf"
+  ],
+  [
+   "National Bank of Belgium, Where did the EUR 22 billion released from the 2023 State note go?, blog, 2024",
+   "https://nbb.be/en/blog/where-did-eu22-billion-released-2023-state-note-go"
+  ]
+ ],
+ [
+  [
+   "Eurostat, Gross domestic product (GDP) and main components (nama_10_gdp), P31_S14_S15 and P31_S14, percentage of GDP",
+   "https://ec.europa.eu/eurostat/databrowser/view/nama_10_gdp/default/table?lang=en"
+  ]
+ ]
+];
+ASSUMPTIONS.forEach(function (row, i) { row.push(EVIDENCE[i] || []); });
+export const EVIDENCE_REVIEWED = '6 October 2026';
 
 export const LEVERS = [
   { k: 'vatFood', n: 'Cut VAT on food essentials', unit: ' pp', max: 10, step: 0.5, grp: 'Prices',
-    d: 'Lower the VAT rate on basic foodstuffs.', law: 'Allowed: the VAT Directive (as amended by Directive (EU) 2022/542) permits reduced and zero rates on foodstuffs.' },
+    d: 'Lower the VAT rate on basic foodstuffs.', law: 'Allowed: the VAT Directive (as amended by Directive (EU) 2022/542) permits reduced and zero rates on foodstuffs.', ref: ["Council Directive 2006/112/EC (consolidated), Article 98(1)–(2) and Annex III, point (1)", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02006L0112-20250101"] },
   { k: 'energy', n: 'Absorb energy price growth above ' + K.energyFloor + '%', unit: '%', max: 100, step: 5, grp: 'Prices',
-    d: 'The state covers this share of energy price growth above ' + K.energyFloor + '% a year, through a bill cap or rebate.', law: 'Design within State-aid rules and keep an incentive to save energy; target vulnerable users where possible.' },
+    d: 'The state covers this share of energy price growth above ' + K.energyFloor + '% a year, through a bill cap or rebate.', law: 'Directive (EU) 2019/944, Article 5, allows below-cost regulated electricity prices only for energy-poor or vulnerable households; Article 66a extends this to other households (up to 80% of median consumption) if the Council declares a price crisis. Aid to firms must respect State-aid rules.', ref: ["Directive (EU) 2019/944 as amended by Directive (EU) 2024/1711, Articles 5 and 66a", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02019L0944-20240716"] },
   { k: 'rent', n: 'Limit annual rent increases', unit: '% cap', max: 8, step: 0.5, off: 8, grp: 'Prices',
-    d: 'Rents may rise by at most this much a year. 8% means no cap.', law: 'National competence. Tight caps can reduce rental supply over time.' },
+    d: 'Rents may rise by at most this much a year. 8% means no cap.', law: 'National competence. Tight caps can reduce rental supply over time.', ref: ["Commission proposal COM(2026) 599 final (Affordable Housing Act), explanatory memorandum", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52026PC0599"] },
   { k: 'reserve', n: 'Release strategic stocks', unit: '% of use', max: 10, step: 0.5, grp: 'Supply',
-    d: 'Release food and energy reserves equal to this share of annual consumption.', law: 'Oil stocks are governed by Directive 2009/119/EC. Restricting exports to other member states is barred by Article 35 TFEU.' },
+    d: 'Release food and energy reserves equal to this share of annual consumption.', law: 'Directive 2009/119/EC requires oil stocks of at least 90 days of net imports or 61 days of consumption, whichever is greater, and ties releases to supply disruptions (Article 20). Article 35 TFEU prohibits export restrictions between member states, subject to the Article 36 exceptions.', ref: ["Council Directive 2009/119/EC, Articles 3 and 20; Articles 35 and 36 TFEU", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0119"] },
   { k: 'supply', n: 'Supply-side incentives', unit: '% GDP', max: 1.5, step: 0.1, grp: 'Supply',
-    d: 'Incentives for producers that expand output or cut resource use in food, energy and housing.', law: 'Notify under State-aid rules unless covered by a block exemption.' },
+    d: 'Incentives for producers that expand output or cut resource use in food, energy and housing.', law: 'Aid must be notified to the Commission before it is granted (Article 108(3) TFEU) unless it is block-exempted, chiefly under Regulation (EU) No 651/2014, which applies until 31 December 2026, or is de minimis aid under Regulation (EU) 2023/2831.', ref: ["Commission Regulation (EU) No 651/2014 (consolidated), Article 59; Article 108(3) TFEU", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0651-20230701"] },
   { k: 'transfer', n: 'Targeted relief to low-income households', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
-    d: 'Payments restricted to the bottom 30% of households.', law: 'Counts towards the net-expenditure path under Regulation (EU) 2024/1263.' },
+    d: 'Payments restricted to the bottom 30% of households.', law: 'Counts as net expenditure under Article 2(2) of Regulation (EU) 2024/1263, which nets out only interest, discretionary revenue measures, EU-funded programme spending and national co-financing, cyclical unemployment benefit spending, and one-offs and other temporary measures.', ref: ["Regulation (EU) 2024/1263, Article 2(2)", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1263"] },
   { k: 'bonds', n: 'Inflation-linked retail savings bonds', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
-    d: 'Household take-up of government bonds whose return tracks inflation.', law: 'National debt-management decision. Indexation cost rises with inflation.' },
+    d: 'Household take-up of government bonds whose return tracks inflation.', law: 'National debt-management decision. Indexation cost rises with inflation.', ref: ["Italian Treasury (MEF), BTP Italia Sì announcement, May 2026", "https://www.dt.mef.gov.it/en/news/2026/btp_italia_20052026.html"] },
   { k: 'wageIdx', n: 'Automatic wage indexation coverage', unit: '% of pay', max: 100, step: 5, grp: 'Households',
-    d: 'Share of the wage bill that rises automatically with inflation.', law: 'Social partners’ and national competence. Belgium, Luxembourg, Malta and Cyprus run such systems.' },
+    d: 'Share of the wage bill that rises automatically with inflation.', law: 'Social partners’ and national competence. Belgium, Luxembourg, Malta and Cyprus run such systems.', ref: ["ECB Economic Bulletin 7/2021, box on private sector wage indexation in the euro area", "https://www.ecb.europa.eu/press/economic-bulletin/focus/2021/html/ecb.ebbox202107_07~f555b70c47.en.html"] },
   { k: 'vatLux', n: 'Raise consumption tax on non-essentials', unit: ' pp', max: 5, step: 0.5, grp: 'Revenue',
-    d: 'Higher tax on clothing, leisure and restaurants; helps fund relief.', law: 'The VAT Directive allows only one standard rate, so a separate luxury rate is not available: move items out of reduced rates or use excise duties.' },
+    d: 'Higher tax on clothing, leisure and restaurants; helps fund relief.', law: 'The VAT Directive allows only one standard rate, so a separate luxury rate is not available: move items out of reduced rates or use excise duties.', ref: ["Council Directive 2006/112/EC (consolidated), Articles 96–98", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02006L0112-20250101"] },
   { k: 'rate', n: 'Change the policy interest rate', unit: ' bp', min: -200, max: 200, step: 25, grp: 'Monetary',
-    d: 'Tighten or loosen monetary policy.', law: 'Decided independently by the central bank (Article 130 TFEU). In the euro area this is the ECB, for all members at once.' }
+    d: 'Tighten or loosen monetary policy.', law: 'Decided independently by the central bank (Article 130 TFEU). In the euro area this is the ECB, for all members at once.', ref: ["Article 130 TFEU; ECB press release of 1 January 2026 on Bulgaria", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12016E130"] }
 ];
+// Legal basis of the fiscal reference values used in the warnings below.
+export const REFERENCE_VALUES = ["The reference values of 3% of GDP for the government deficit and 60% of GDP for government debt are set in Article 1 of Protocol (No 12) on the excessive deficit procedure, annexed to the Treaties, for the purposes of Article 126(2) TFEU.", "Protocol (No 12) on the excessive deficit procedure, Article 1", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12016E/PRO/12"];
 export const NO_POLICY = {};
 LEVERS.forEach(function (l) { NO_POLICY[l.k] = l.off === undefined ? 0 : l.off; });
 
@@ -293,7 +480,7 @@ export function simulate(s, L) {
   if (L.energy > 0) {
     const bind = Math.max(0, (num(s.nrg) ? s.nrg : 0) - K.energyFloor) * L.energy / 100;
     add('energy', times(K.energyPass, -w.NRG * bind), w.NRG * bind * c, 0,
-      bind > 0 ? 'Energy inflation is ' + s.nrg.toFixed(1) + '%; ' + bind.toFixed(1) + ' points absorbed.' : 'Not binding: energy inflation is at or below ' + K.energyFloor + '%.');
+      bind > 0 ? 'Energy inflation is ' + s.nrg.toFixed(1) + '%; ' + bind.toFixed(1) + ' points absorbed. Prices rebound when support ends.' : 'Not binding: energy inflation is at or below ' + K.energyFloor + '%.');
   }
   if (num(L.rent) && L.rent < NO_POLICY.rent) {
     const bind = Math.max(0, (num(s.rent) ? s.rent : 0) - L.rent), e = -w.CP041 * bind;
@@ -301,10 +488,10 @@ export function simulate(s, L) {
     if (bind > 2) flags.push('A rent cap this far below market growth risks shrinking rental supply.');
   }
   if (L.reserve > 0) add('reserve', times(K.reserve, -L.reserve * K.reserveBase * (w.FOOD + w.NRG)), L.reserve * K.reserveCarry, 0, 'Temporary: stocks must be rebuilt later.');
-  if (L.supply > 0) add('supply', [0, 1, 2].map(function (i) { return L.supply * (K.supplyDemand * K.demand[i] - K.supply[i]); }), L.supply, K.gdpSupply * L.supply, 'Main effect arrives in years two and three.');
+  if (L.supply > 0) add('supply', [0, 1, 2].map(function (i) { return L.supply * (K.supplyDemand * K.demand[i] - K.supply[i]); }), L.supply, K.gdpSupply * L.supply, 'No price relief in the first year; the supply benefit arrives in years two and three.');
   if (L.transfer > 0) add('transfer', times(K.demand, L.transfer * K.spendTransfer), L.transfer, K.gdpTransfer * L.transfer,
     'Equals ' + (L.transfer / (K.lowShare * c * 100) * 100).toFixed(1) + '% of low-income households’ annual spending.');
-  if (L.bonds > 0) add('bonds', times(K.demand, -L.bonds * K.bondDivert), L.bonds * Math.max(0, pi - 2) / 100, -K.gdpBonds * L.bonds, 'Savers keep their purchasing power.');
+  if (L.bonds > 0) add('bonds', times(K.demand, -L.bonds * K.bondDivert), L.bonds * Math.max(0, pi - 2) / 100, -K.gdpBonds * L.bonds, 'Protects savers; bought mostly out of bank deposits, so it cools spending only a little.');
   if (L.wageIdx > 0) {
     add('wageIdx', times(K.wage, Math.max(0, pi - 2) * L.wageIdx / 100), 0, 0, 'Protects real pay but slows the return to target.');
     if (L.wageIdx >= 50 && pi > 4) flags.push('Broad wage indexation with inflation above 4% raises the risk of a wage–price spiral.');

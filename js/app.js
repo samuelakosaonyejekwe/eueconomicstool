@@ -1,13 +1,13 @@
 import { COUNTRIES, BY_CODE, CODES, NON_EURO, nameOf } from './countries.js';
 import { DATASETS, CORE_IDS, ALL_IDS, COICOP, DIVISIONS, fetchDataset, isStale, sourceUrl } from './data.js';
 import * as M from './model.js';
-import { STRATEGIES, CATEGORIES, ROLES, recommend, applies } from './strategies.js';
+import { STRATEGIES, CATEGORIES, ROLES, REVIEWED, recommend, applies } from './strategies.js';
 import { lineChart, spark, barList, meter, fmt, esc, periodLabel } from './charts.js';
 import { PAGE_METHOD } from './method.js';
 
 const BASE = new URL('../', import.meta.url).href;
 const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || (BASE.indexOf('@main/') > 0 ? 'latest' : 'stored copy');
-const VERSION = '1.5.0'; // the only place the release number is written
+const VERSION = '1.6.0'; // the only place the release number is written
 window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
@@ -49,7 +49,7 @@ function period(id, key) { const o = M.latest(D, id, key); return o ? periodLabe
 // ---------- building blocks ----------
 function card(title, body, o) {
   o = o || {};
-  return '<section class="card' + (o.cls ? ' ' + o.cls : '') + '"><header><h3>' + title + '</h3>' + (o.sub ? '<p>' + o.sub + '</p>' : '') + '</header><div class="cb">' + body + '</div>' +
+  return '<section class="card' + (o.cls ? ' ' + o.cls : '') + '"><header><h2>' + title + '</h2>' + (o.sub ? '<p>' + o.sub + '</p>' : '') + '</header><div class="cb">' + body + '</div>' +
     (o.src ? '<footer>' + src(o.src) + '</footer>' : '') + '</section>';
 }
 function src(ids) {
@@ -64,8 +64,8 @@ function tile(label, value, sub, o) {
 }
 function badge(text, tone) { return '<span class="badge b-' + (tone || 'mute') + '">' + esc(text) + '</span>'; }
 function subtabs(page) {
-  return '<div class="subtabs" role="tablist">' + SUBS[page].map(function (s) {
-    return '<button role="tab" aria-selected="' + (st.sub[page] === s[0]) + '" data-sub="' + s[0] + '">' + s[1] + '</button>';
+  return '<div class="subtabs" role="group" aria-label="Sections of this page">' + SUBS[page].map(function (s) {
+    return '<button aria-pressed="' + (st.sub[page] === s[0]) + '" data-sub="' + s[0] + '">' + s[1] + '</button>';
   }).join('') + '</div>';
 }
 function link(target) { return target === 'overview' ? './' : '#' + target; }
@@ -76,9 +76,9 @@ function neighbours() {
 }
 function head(title, lead, extra) {
   const nb = neighbours();
-  return '<div class="ph"><div class="pht"><h2>' + title + '</h2><p>' + lead + '</p>' + (extra || '') + '</div><div class="hop">' +
+  return '<div class="ph"><div class="pht"><h1 id="title" tabindex="-1">' + title + '</h1><p>' + lead + '</p>' + (extra || '') + '</div><div class="hop">' +
     '<a class="hopb" href="' + link(nb.prev.k) + '" data-go="' + nb.prev.k + '" aria-label="Back to ' + nb.prev.n + '" title="Back: ' + nb.prev.n + '">' + ARROW_L + '</a>' +
-    '<span>' + (nb.i + 1) + ' / ' + PAGES.length + '</span>' +
+    '<span aria-label="Page ' + (nb.i + 1) + ' of ' + PAGES.length + '">' + (nb.i + 1) + ' / ' + PAGES.length + '</span>' +
     '<a class="hopb" href="' + link(nb.next.k) + '" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '" title="Next: ' + nb.next.n + '">' + ARROW_R + '</a></div></div>';
 }
 function heatStep(pi) {
@@ -92,11 +92,11 @@ function trend(now, before) {
 }
 function list(rows) {
   return '<ul class="rank">' + rows.map(function (r) {
-    return '<li' + (r.c ? ' data-country="' + r.c + '" data-open="1" tabindex="0" role="link"' : '') + '><span>' + esc(r.n) + '</span><b>' + r.v + '</b></li>';
+    return '<li>' + (r.c ? '<a href="#country/' + r.c + '" data-go="country/' + r.c + '">' + esc(r.n) + '</a>' : '<span>' + esc(r.n) + '</span>') + '<b>' + r.v + '</b></li>';
   }).join('') + '</ul>';
 }
-function range(k, v, min, max, step, group) {
-  return '<input type="range" data-' + group + '="' + k + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '">';
+function range(k, v, min, max, step, group, text) {
+  return '<input type="range" data-' + group + '="' + k + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '"' + (text ? ' aria-valuetext="' + esc(text) + '"' : '') + '>';
 }
 
 // ---------- Overview ----------
@@ -109,7 +109,7 @@ function pageOverview() {
   const row = function (f, dp, u) { return function (s) { return { c: s.c, n: s.meta.n, v: fmt(f(s), dp) + u }; }; };
   const map = '<div class="tilemap">' + COUNTRIES.map(function (m) {
     const s = snap(m.c);
-    return '<button class="mt ' + heatStep(s.pi) + (m.c === st.c ? ' sel' : '') + '" style="grid-column:' + (m.g[0] + 1) + ';grid-row:' + (m.g[1] + 1) + '" data-country="' + m.c + '" data-open="1" aria-label="' + esc(m.n) + ', inflation ' + pct(s.pi) + '" title="' + esc(m.n) + ': ' + pct(s.pi) + '"><b>' + m.c + '</b><span>' + fmt(s.pi) + '</span></button>';
+    return '<button class="mt ' + heatStep(s.pi) + (m.c === st.c ? ' sel' : '') + '" style="grid-column:' + (m.g[0] + 1) + ';grid-row:' + (m.g[1] + 1) + '" data-country="' + m.c + '" data-open="1" title="' + esc(m.n) + ': ' + pct(s.pi) + '"><span class="sr">' + esc(m.n) + ', inflation </span><b aria-hidden="true">' + m.c + '</b><span>' + fmt(s.pi) + '</span><span class="sr"> per cent</span></button>';
   }).join('') + '</div><div class="scale"><span>Below target</span><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i><i class="h5"></i><i class="h6"></i><i class="h7"></i><span>Far above</span></div>' +
     '<p class="note">Each square is a member state, placed roughly where it sits on the map. Grey means inflation is within half a point of 2%. Select a square to open the country.</p>';
   const rank = barList(all.slice().sort(function (a, b) { return (b.pi === null ? -99 : b.pi) - (a.pi === null ? -99 : a.pi); }).map(function (s) {
@@ -158,9 +158,10 @@ function pressures(s, withText) {
 }
 function stratCard(r, compact) {
   const s = r.s, sp = ['', 'Weeks', 'Months', 'Years'][s.speed], co = ['No budget cost', 'Low cost', 'Medium cost', 'High cost'][s.fisc];
-  const fe = [['EU-level decision', 'serious'], ['Needs careful legal design', 'warn'], ['Usable under current EU rules', 'good']][s.feas];
-  return '<article class="strat"><header><h4>' + esc(s.n) + '</h4><span class="cat">' + esc(s.cat) + '</span></header><p>' + esc(s.d) + '</p>' +
-    (compact ? '' : '<p class="eu"><b>EU fit.</b> ' + esc(s.eu) + '</p>') +
+  const fe = { '-1': ['Not workable as proposed', 'crit'], 0: ['EU-level decision', 'serious'], 1: ['Needs careful legal design', 'warn'], 2: ['Usable under current EU rules', 'good'] }[s.feas];
+  const source = s.src ? ' <a class="srcl" href="' + esc(s.src[1]) + '" target="_blank" rel="noopener">Source: ' + esc(s.src[0]) + '</a>' : '';
+  return '<article class="strat"><header><' + (compact ? 'h3' : 'h2') + ' class="st">' + esc(s.n) + '</' + (compact ? 'h3' : 'h2') + '><span class="cat">' + esc(s.cat) + '</span></header><p>' + esc(s.d) + '</p>' +
+    (compact ? '' : '<p class="eu"><b>EU fit.</b> ' + esc(s.eu) + source + '</p>') +
     '<div class="chips">' + badge(fe[0], fe[1]) + badge('Takes effect in: ' + sp.toLowerCase(), 'mute') + badge(co, 'mute') +
     (s.scope === 'noneuro' ? badge('Own-currency members', 'info') : s.scope === 'eu' ? badge('Union level', 'info') : '') + '</div>' +
     (compact ? '' : '<p class="who">For: ' + s.who.map(function (w) { return ROLES.filter(function (x) { return x.k === w; })[0].n; }).join(', ') + ' · Source framework: ' + esc(s.ac) + '</p>') +
@@ -191,7 +192,7 @@ function pageCountry() {
     }), { sub: 'Annual HICP rate, %', src: 'hicp' }) +
     card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="#inflation/diag" data-go="inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
     '</div><div class="grid two">' +
-    card('Prices by spending category', barList(div, { unit: '%', ref: s.piDiv, refLabel: 'Overall inflation in ' + periodLabel(s.divT) + ', ' + pct(s.piDiv) }) + '<h4 class="grp" style="margin-top:18px">Also watch</h4><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %, ' + periodLabel(s.divT), src: 'hicpd' }) +
+    card('Prices by spending category', barList(div, { unit: '%', ref: s.piDiv, refLabel: 'Overall inflation in ' + periodLabel(s.divT) + ', ' + pct(s.piDiv) }) + '<h3 class="grp" style="margin-top:18px">Also watch</h3><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %, ' + periodLabel(s.divT), src: 'hicpd' }) +
     card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="#strategies" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
     '</div>';
 }
@@ -231,7 +232,7 @@ function labParts(s) {
       return { name: COICOP[k], values: h.s[k + '|' + s.c] || [], color: i + 1 };
     }).filter(function (x, i) { return st.parts.indexOf(PART_KEYS[i]) >= 0; }) });
   }), { sub: 'Annual rate of change, %. Choose the lines to show.', src: 'hicp' }) +
-    card('All thirteen spending categories', '<div class="tw"><table><thead><tr><th>Category</th><th>Now</th><th>A year ago</th><th>Share of basket</th><th>Two years</th></tr></thead><tbody>' + rows + '</tbody></table></div>', { sub: 'Annual rate of change and weight in the consumer basket', src: ['hicpd', 'hicpw'] });
+    card('All thirteen spending categories', '<div class="tw"><table><thead><tr><th scope="col">Category</th><th scope="col">Now</th><th scope="col">A year ago</th><th scope="col">Share of basket</th><th scope="col">Two years</th></tr></thead><tbody>' + rows + '</tbody></table></div>', { sub: 'Annual rate of change and weight in the consumer basket', src: ['hicpd', 'hicpw'] });
 }
 function defaultShares(c) { const w = M.weights(D, c), o = {}; M.BUDGET.forEach(function (b) { o[b.k] = Math.round(w[b.k] * 100); }); return o; }
 function personalOut() {
@@ -248,7 +249,7 @@ function personalOut() {
 function labPersonal(s) {
   const sh = st.shares || defaultShares(st.c);
   return '<div class="grid two">' + card('Your monthly spending', '<div class="sliders">' + M.BUDGET.map(function (b) {
-    return '<label><span>' + b.n + '<small>prices ' + rate(M.val(D, 'hicpd', b.k + '|' + st.c)) + '</small></span>' + range(b.k, sh[b.k] || 0, 0, 60, 1, 'share') + '<output>' + (sh[b.k] || 0) + '%</output></label>';
+    return '<label><span>' + b.n + '<small>prices ' + rate(M.val(D, 'hicpd', b.k + '|' + st.c)) + '</small></span>' + range(b.k, sh[b.k] || 0, 0, 60, 1, 'share', (sh[b.k] || 0) + '%') + '<output>' + (sh[b.k] || 0) + '%</output></label>';
   }).join('') + '</div><button class="btn" data-act="resetShares">Reset to the national average</button>', { sub: 'Set the share of your budget that goes to each category' }) +
     card('Your result', '<div id="out">' + personalOut() + '</div>', { sub: 'How price changes hit your own basket', src: ['hicpd', 'hicpw'] }) + '</div>';
 }
@@ -277,7 +278,7 @@ function labOutlook(s) {
     ['Rents', s.rent, M.val(D, 'hicpd', 'CP041|' + s.c, 3), '%', 'Rents move slowly and keep services inflation up.'],
     ['House prices', s.hpi, M.val(D, 'hpi', s.c, 1), '%', 'Rising house prices feed into rents with a delay.']];
   return '<div class="grid two">' + card('Six-month projection', tiles + body + '<p class="note">The shaded band is how far this simple rule has missed in the past for ' + esc(s.meta.n) + '. It is a momentum signal, not an official forecast.</p>', { sub: 'Annual HICP rate, %', src: 'hicp' }) +
-    card('Pressure in the pipeline', '<div class="tw"><table><thead><tr><th>Leading indicator</th><th>Now</th><th>Earlier</th><th>Signal</th></tr></thead><tbody>' + pipe.map(function (r) {
+    card('Pressure in the pipeline', '<div class="tw"><table><thead><tr><th scope="col">Leading indicator</th><th scope="col">Now</th><th scope="col">Earlier</th><th scope="col">Signal</th></tr></thead><tbody>' + pipe.map(function (r) {
       const d = typeof r[1] === 'number' && typeof r[2] === 'number' ? r[1] - r[2] : null;
       return '<tr><td><b>' + r[0] + '</b><br><small>' + r[4] + '</small></td><td>' + unit(r[1], r[3]) + '</td><td>' + unit(r[2], r[3]) + '</td><td>' + (d === null ? '–' : d > 0.2 ? badge('Building', 'warn') : d < -0.2 ? badge('Easing', 'good') : badge('Steady', 'mute')) + '</td></tr>';
     }).join('') + '</tbody></table></div><p class="note">“Earlier” is three months back, or one quarter for wages and house prices. Signals show direction only.</p>', { sub: 'Indicators that tend to move before consumer prices', src: ['ppi', 'wages', 'expect'] }) + '</div>';
@@ -313,10 +314,10 @@ function curMonitor(s) {
     tile('Volatility', pct(s.fxVol), 'Annualised, last 90 trading days', { tone: s.fxVol > 10 ? 'warn' : '' }) +
     '</div><div class="grid two">' +
     card(own ? s.fxCur + ' per euro' : 'US dollars per euro', chart(function (el) {
-      lineChart(el, { t: fx.t, height: 300, dp: s.fxRate > 100 ? 1 : 4, series: [{ name: s.fxCur + ' per EUR', values: arr || [], color: 1 }], refs: m.peg ? [{ y: m.peg, label: 'ERM II central rate' }] : [], label: 'Exchange rate' });
+      lineChart(el, { t: fx.t, height: 300, dp: s.fxRate > 100 ? 1 : 4, series: [{ name: s.fxCur + ' per EUR', values: arr || [], color: 1 }], refs: m.peg ? [{ y: m.peg, label: 'Central rate' }] : [], label: 'Exchange rate' });
     }) + peg + '<p class="note">' + (own ? 'A rising line means the ' + m.cur + ' is losing value against the euro, which makes imports dearer.' : 'A falling line means the euro is losing value against the dollar, which makes dollar-priced imports such as energy dearer.') + '</p>', { sub: 'Daily ECB reference rate, two years', src: 'fx' }) +
     card('External position', '<div class="kv one">' + ext.map(function (r) { return '<div><span>' + r[0] + '</span><b>' + fmt(r[1]) + ' <small>' + r[2] + '</small></b></div>'; }).join('') + '</div><p class="note">A deficit on the current account and high import dependence make a country more exposed to currency and commodity swings.</p>', { sub: 'Trade and payments with the rest of the world', src: ['ca', 'gdpa', 'nrgdep'] }) +
-    '</div>' + card('The six EU currencies outside the euro', '<div class="tw"><table><thead><tr><th>Member state</th><th>Currency</th><th>Per euro</th><th>1 month</th><th>12 months</th><th>Volatility</th></tr></thead><tbody>' + tbl + '</tbody></table></div><p class="note">Changes show the gain (+) or loss (−) in the currency’s value against the euro.</p>', { sub: 'Select a row to switch country', src: 'fx' });
+    '</div>' + card('The six EU currencies outside the euro', '<div class="tw"><table><thead><tr><th scope="col">Member state</th><th scope="col">Currency</th><th scope="col">Per euro</th><th scope="col">1 month</th><th scope="col">12 months</th><th scope="col">Volatility</th></tr></thead><tbody>' + tbl + '</tbody></table></div><p class="note">Changes show the gain (+) or loss (−) in the currency’s value against the euro.</p>', { sub: 'Select a row to switch country', src: 'fx' });
 }
 function lockOut() {
   const a = st.calc.lock, r = M.fxLock(a);
@@ -394,19 +395,20 @@ function simOut() {
     tile('Range', fmt(r.pi + r.lo) + ' – ' + fmt(r.pi + r.hi) + '%', 'Low and high assumptions', {}) + '</div><div class="tiles two">' +
     tile('Budget cost', signed(r.cost, 2) + '% GDP', r.costEur !== null ? '€' + fmt(Math.abs(r.costEur) / 1000, 1) + ' bn a year' + (r.cost < 0 ? ' raised' : '') : '', { tone: r.cost > 1 ? 'warn' : '' }) +
     tile('Government balance', r.bal === null ? '–' : pct(r.bal), 'Was ' + pct(s.bal) + ' of GDP · GDP effect ' + signed(r.gdp, 1) + '%', { tone: r.bal !== null && r.bal < -3 ? 'serious' : '' }) + '</div>' +
-    '<div class="tw"><table><thead><tr><th>Measure</th><th>Inflation</th><th>Range</th><th>Cost, % GDP</th></tr></thead><tbody>' + r.rows.map(function (x) {
+    '<div class="tw"><table><thead><tr><th scope="col">Measure</th><th scope="col">Inflation</th><th scope="col">Range</th><th scope="col">Cost, % GDP</th></tr></thead><tbody>' + r.rows.map(function (x) {
       return '<tr><td><b>' + names[x.k].n + '</b><br><small>' + esc(x.note) + '</small></td><td>' + signed(x.mid, 2) + ' pp</td><td>' + signed(x.lo, 2) + ' to ' + signed(x.hi, 2) + '</td><td>' + signed(x.cost, 2) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     (r.flags.length ? '<ul class="flags">' + r.flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
-    '<details class="law" open><summary>EU legal and institutional notes for this package</summary><ul>' + r.rows.map(function (x) { return '<li><b>' + names[x.k].n + '.</b> ' + esc(names[x.k].law) + '</li>'; }).join('') + '</ul></details>';
+    '<details class="law" open><summary>EU legal and institutional notes for this package</summary><ul>' + r.rows.map(function (x) { const l = names[x.k]; return '<li><b>' + l.n + '.</b> ' + esc(l.law) + (l.ref && l.ref[1] ? ' <a class="srcl" href="' + esc(l.ref[1]) + '" target="_blank" rel="noopener">Source: ' + esc(l.ref[0]) + '</a>' : '') + '</li>'; }).join('') +
+    '</ul><p class="note">Notes checked against the linked official texts on ' + REVIEWED + '. They summarise the law in general terms and are not legal advice.</p></details>';
 }
 function pageSimulator() {
   const s = snap(st.c), groups = {};
   M.LEVERS.forEach(function (l) { (groups[l.grp] = groups[l.grp] || []).push(l); });
   const left = Object.keys(groups).map(function (g) {
-    return '<h4 class="grp">' + g + '</h4><div class="sliders wide">' + groups[g].map(function (l) {
+    return '<h3 class="grp">' + g + '</h3><div class="sliders wide">' + groups[g].map(function (l) {
       const v = st.L[l.k];
-      return '<label><span>' + l.n + '<small>' + l.d + '</small></span>' + range(l.k, v, l.min || 0, l.max, l.step, 'lever') + '<output>' + leverLabel(l, v) + '</output></label>';
+      return '<label><span>' + l.n + '<small>' + l.d + '</small></span>' + range(l.k, v, l.min || 0, l.max, l.step, 'lever', leverLabel(l, v)) + '<output>' + leverLabel(l, v) + '</output></label>';
     }).join('') + '</div>';
   }).join('');
   return head('Policy Simulator · ' + esc(s.meta.n), 'Combine measures and see their estimated first-year effect on inflation, the budget and growth.') +
@@ -428,7 +430,7 @@ function stratList() {
     (rows.length ? '<div class="strats">' + rows.map(function (r) { return stratCard(r); }).join('') + '</div>' : '<p class="empty">No strategy matches these filters.</p>');
 }
 function pageStrategies() {
-  return head('Strategy Library', STRATEGIES.length + ' policy and market-design options for price and currency stability, each assessed against EU rules.') +
+  return head('Strategy Library', STRATEGIES.length + ' policy and market-design options for price and currency stability. Each EU note links to the official text it rests on, last checked on ' + REVIEWED + '.') +
     '<div class="filters"><label class="fld grow"><span>Search</span><input type="search" id="q" value="' + esc(st.lib.q) + '" placeholder="For example rent, energy, reserves"></label>' +
     '<label class="fld"><span>Category</span><select id="cat"><option value="">All categories</option>' + CATEGORIES.map(function (c) { return '<option' + (st.lib.cat === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></label>' +
     '<label class="chk"><input type="checkbox" id="fitc"' + (st.lib.fit ? ' checked' : '') + '> Rank by match with ' + esc(nameOf(st.c)) + '</label></div><div id="out">' + stratList() + '</div>';
@@ -436,13 +438,13 @@ function pageStrategies() {
 
 // ---------- Compare ----------
 const IND = {
-  pi: { n: 'Inflation, all items', u: '%', f: 'pi', ser: ['hicp', 'TOTAL|'], ref: 2, rl: 'ECB target of 2%' },
+  pi: { n: 'Inflation, all items', u: '%', f: 'pi', ser: ['hicp', 'TOTAL|'], ref: 2, rl: 'ECB target of 2%', short: '2% target' },
   core: { n: 'Core inflation', u: '%', f: 'core', ser: ['hicp', 'TOT_X_NRG_FOOD|'] }, food: { n: 'Food inflation', u: '%', f: 'food', ser: ['hicp', 'FOOD|'] },
   nrg: { n: 'Energy inflation', u: '%', f: 'nrg', ser: ['hicp', 'NRG|'] }, serv: { n: 'Services inflation', u: '%', f: 'serv', ser: ['hicp', 'SERV|'] },
   une: { n: 'Unemployment rate', u: '%', f: 'une', ser: ['une', ''] }, gdp: { n: 'Real GDP growth', u: '%', f: 'gdp', ser: ['gdpq', ''] },
   wage: { n: 'Wage growth', u: '%', f: 'wage', ser: ['wages', ''] }, hpi: { n: 'House price growth', u: '%', f: 'hpi', ser: ['hpi', ''] },
-  ppi: { n: 'Producer price inflation', u: '%', f: 'ppi', ser: ['ppi', ''] }, debt: { n: 'Government debt, % of GDP', u: '%', f: 'debt', ref: 60, rl: 'Treaty reference value of 60%', dp: 0 },
-  bal: { n: 'Government balance, % of GDP', u: '%', f: 'bal', ref: -3, rl: 'Treaty reference value of −3%' }, ca: { n: 'Current account, % of GDP', u: '%', f: 'ca' },
+  ppi: { n: 'Producer price inflation', u: '%', f: 'ppi', ser: ['ppi', ''] }, debt: { n: 'Government debt, % of GDP', u: '%', f: 'debt', ref: 60, rl: 'Treaty reference value of 60%', short: '60% reference', dp: 0 },
+  bal: { n: 'Government balance, % of GDP', u: '%', f: 'bal', ref: -3, rl: 'Treaty reference value of −3%', short: '−3% reference' }, ca: { n: 'Current account, % of GDP', u: '%', f: 'ca' },
   nrgdep: { n: 'Energy import dependency', u: '%', f: 'nrgdep', dp: 0 }, heat: { n: 'Overall pressure score (0–100)', u: '', f: 'heat', dp: 0 }
 };
 function pageCompare() {
@@ -451,7 +453,7 @@ function pageCompare() {
     .sort(function (a, b) { return (b.value === null ? -1e9 : b.value) - (a.value === null ? -1e9 : a.value); });
   const d = ind.ser ? D[ind.ser[0]] : null;
   const right = d ? chart(function (el) {
-    lineChart(el, { t: d.t, unit: ind.u, height: 440, refs: typeof ind.ref === 'number' ? [{ y: ind.ref, label: ind.rl }] : [], label: ind.n,
+    lineChart(el, { t: d.t, unit: ind.u, height: 440, refs: typeof ind.ref === 'number' ? [{ y: ind.ref, label: ind.short }] : [], label: ind.n,
       series: st.cmp.sel.map(function (c, i) { return { name: nameOf(c), values: d.s[ind.ser[1] + c] || [], color: i + 1 }; }) });
   }) : '<p class="empty">This indicator is published once a year, so only the latest ranking is shown.</p>';
   return head('Compare member states', 'Rank all 27 countries on one indicator and follow up to four of them over time.') +
@@ -473,19 +475,19 @@ function pageMethod() {
   const sub = st.sub.method;
   let body;
   if (sub === 'sources') {
-    body = card('Live data feeds', '<div class="tw"><table><thead><tr><th>Dataset</th><th>Publisher</th><th>Frequency</th><th>Latest period</th><th>Fetched by this device</th><th>Status</th></tr></thead><tbody>' + ALL_IDS.map(function (id) {
+    body = card('Live data feeds', '<div class="tw"><table><thead><tr><th scope="col">Dataset</th><th scope="col">Publisher</th><th scope="col">Frequency</th><th scope="col">Latest period</th><th scope="col">Fetched by this device</th><th scope="col">Status</th></tr></thead><tbody>' + ALL_IDS.map(function (id) {
       const d = DATASETS[id], e = D[id], stt = STATE[id];
       const b = stt === 'live' ? badge('Live', 'good') : stt === 'error' ? badge(e ? 'Using saved copy' : 'Unavailable', e ? 'warn' : 'crit') : stt === 'loading' ? badge('Updating', 'info') : badge(e && e.at ? 'Saved copy' : 'Baseline', 'mute');
       return '<tr><td><a href="' + sourceUrl(id) + '" target="_blank" rel="noopener"><b>' + d.label + '</b></a>' + (d.code ? '<br><small>' + d.code + '</small>' : e && e.via ? '<br><small>via ' + esc(e.via) + '</small>' : '') + '</td><td>' + esc(d.src) + '</td><td>' + d.freq + '</td><td>' + (e ? periodLabel(e.t[e.t.length - 1]) : '–') + '</td><td>' + (e ? ago(e.at) : '–') + '</td><td>' + b + '</td></tr>';
-    }).join('') + '</tbody></table></div><div class="actions"><button class="btn primary" data-act="refresh">Refresh all now</button><button class="btn" data-act="download">Download the data (JSON)</button><button class="btn" data-act="csv">Download ' + esc(nameOf(st.c)) + ' summary (CSV)</button></div>' +
+    }).join('') + '</tbody></table></div><div class="actions"><button class="btn primary" data-act="refresh">Refresh all now</button><button class="btn" data-act="print">Print or save as PDF</button><button class="btn" data-act="download">Download the data (JSON)</button><button class="btn" data-act="csv">Download ' + esc(nameOf(st.c)) + ' summary (CSV)</button></div>' +
       '<p class="note">Your browser fetches every figure directly from the publisher each time you open the tool and again while it stays open: exchange rates hourly, monthly statistics every six hours. Nothing passes through a private server. When you are offline the tool shows the copy saved on this device.</p>', { sub: ALL_IDS.length + ' official feeds, updated automatically' });
-  } else body = PAGE_METHOD(sub, { VERSION: VERSION + ' · build ' + BUILD, card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
+  } else body = PAGE_METHOD(sub, { VERSION: VERSION + ' · build ' + BUILD, REVIEWED: REVIEWED, card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
   return head('Data & Method', 'Where every number comes from, how the gauges and estimates are built, and how to install the tool.') + subtabs('method') + body;
 }
 
 // ---------- shell, routing, events ----------
 const RENDER = { overview: pageOverview, country: pageCountry, inflation: pageInflation, currency: pageCurrency, simulator: pageSimulator, strategies: pageStrategies, compare: pageCompare, method: pageMethod };
-function draw() { jobs.forEach(function (j) { const el = $(j.id); if (el) { try { j.fn(el); } catch (e) { el.innerHTML = '<p class="empty">Chart unavailable.</p>'; } } }); }
+function draw(printing) { jobs.forEach(function (j) { const el = $(j.id); if (el) { el.printWidth = printing ? (el.closest('.grid.two') ? 330 : 700) : 0; try { j.fn(el); } catch (e) { el.innerHTML = '<p class="empty">Chart unavailable.</p>'; } } }); }
 function render(keepScroll) {
   jobs = [];
   const app = $('app'), y = window.pageYOffset;
@@ -496,9 +498,9 @@ function render(keepScroll) {
   draw();
   const nb = neighbours(), i = nb.i, prev = nb.prev, next = nb.next;
   $('nav').innerHTML = PAGES.map(function (p, j) { return '<a href="' + link(p.k) + '" data-go="' + p.k + '"' + (p.k === st.page ? ' aria-current="page"' : '') + '><i>' + (j + 1) + '</i>' + p.n + '</a>'; }).join('');
-  $('pager').innerHTML = '<a class="pg prev" href="' + link(prev.k) + '" data-go="' + prev.k + '" aria-label="Back to ' + prev.n + '"><span class="arr">' + ARROW_L + '</span><span class="pgl"><small>Back</small><b>' + prev.n + '</b></span></a>' +
-    '<span class="dots" aria-label="Page ' + (i + 1) + ' of ' + PAGES.length + '">' + PAGES.map(function (p, j) { return '<a href="' + link(p.k) + '" data-go="' + p.k + '" title="' + p.n + '"' + (j === i ? ' class="on"' : '') + '></a>'; }).join('') + '</span>' +
-    '<a class="pg next" href="' + link(next.k) + '" data-go="' + next.k + '" aria-label="Forward to ' + next.n + '"><span class="pgl"><small>Next</small><b>' + next.n + '</b></span><span class="arr">' + ARROW_R + '</span></a>';
+  $('pager').innerHTML = '<a class="pg prev" href="' + link(prev.k) + '" data-go="' + prev.k + '" ><span class="arr" aria-hidden="true">' + ARROW_L + '</span><span class="pgl"><small>Back</small><b>' + prev.n + '</b></span></a>' +
+    '<span class="dots">' + PAGES.map(function (p, j) { return '<a href="' + link(p.k) + '" data-go="' + p.k + '" title="' + p.n + '" aria-label="' + p.n + '"' + (j === i ? ' class="on" aria-current="page"' : '') + '></a>'; }).join('') + '</span>' +
+    '<a class="pg next" href="' + link(next.k) + '" data-go="' + next.k + '" ><span class="pgl"><small>Next</small><b>' + next.n + '</b></span><span class="arr" aria-hidden="true">' + ARROW_R + '</span></a>';
   const cur = $('nav').querySelector('[aria-current]');
   if (cur && cur.scrollIntoView && !keepScroll) { try { cur.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* older browsers */ } }
   $('csel').value = st.c; $('rsel').value = st.role;
@@ -524,6 +526,8 @@ function show(page, sub) {
 }
 function go(page, sub) {
   show(page, sub);
+  const h = $('title');
+  if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
   try { if (addr() !== location.pathname + location.search + location.hash) history.pushState(null, '', addr()); } catch (e) { /* history unavailable */ }
 }
 function syncAddr() { try { history.replaceState(null, '', addr()); } catch (e) { /* history unavailable */ } }
@@ -549,6 +553,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'download') download('eu-stability-compass-data.json', JSON.stringify({ exported: new Date().toISOString(), datasets: D }), 'application/json');
   else if (a === 'csv') download('summary-' + st.c + '.csv', csvSummary(), 'text/csv');
   else if (a === 'install') install();
+  else if (a === 'print') window.print();
   else if (a === 'close') closeModal();
   else if (a === 'reload') location.reload();
 });
@@ -563,7 +568,7 @@ document.addEventListener('keydown', function (e) {
 });
 document.addEventListener('input', function (e) {
   const t = e.target, ds = t.dataset, v = parseFloat(t.value);
-  const label = function (txt) { const o = t.parentNode.querySelector('output'); if (o) o.textContent = txt; };
+  const label = function (txt) { const o = t.parentNode.querySelector('output'); if (o) o.textContent = txt; t.setAttribute('aria-valuetext', txt); };
   if (ds.lever) { st.L[ds.lever] = v; label(leverLabel(M.LEVERS.filter(function (l) { return l.k === ds.lever; })[0], v)); out(); }
   else if (ds.share) { if (!st.shares) st.shares = defaultShares(st.c); st.shares[ds.share] = v; label(v + '%'); out(); }
   else if (ds.basket) { st.calc.basket[ds.basket] = v; label(v); out(); }
@@ -578,8 +583,15 @@ document.addEventListener('change', function (e) {
   else if (t.id === 'fitc') { st.lib.fit = t.checked; out(); }
   else if (t.id === 'ind') { st.cmp.ind = t.value; render(true); }
 });
+// Printed pages carry their date and address, and charts are redrawn at paper width.
+window.addEventListener('beforeprint', function () {
+  const n = $('printnote');
+  if (n) n.textContent = 'Printed ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · ' + location.href.replace(/^https?:\/\//, '');
+  draw(true);
+});
+window.addEventListener('afterprint', function () { draw(); });
 let rz = 0;
-window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(draw, 150); });
+window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { draw(); }, 150); });
 
 function download(name, text, type) {
   const a = document.createElement('a');
@@ -651,7 +663,7 @@ function install() {
   const steps = ios ? ['Open this page in <b>Safari</b>.', 'Tap the <b>Share</b> button (the square with an arrow).', 'Choose <b>Add to Home Screen</b>, then <b>Add</b>.']
     : android ? ['Open the browser menu (<b>⋮</b>).', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.', 'Confirm with <b>Install</b>.']
       : ['In <b>Chrome</b> or <b>Edge</b>, select the install icon at the right of the address bar, or open the menu and choose <b>Install EU Stability Compass</b>.', 'In <b>Safari</b> on a Mac, choose <b>File → Add to Dock</b>.', 'Firefox on desktop cannot install web apps; the tool still works there and offline once visited.'];
-  $('modal').innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mh"><h3 id="mh">' + (isStandalone() ? 'Already installed' : 'Install on this device') + '</h3>' +
+  $('modal').innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mh"><h2 id="mh">' + (isStandalone() ? 'Already installed' : 'Install on this device') + '</h2>' +
     (isStandalone() ? '<p>You are using the installed app. It opens without a browser and works offline.</p>' : '<ol>' + steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol><p class="note">Once installed, the tool opens from your home screen or desktop and keeps working in aeroplane mode with the last data it fetched.</p>') +
     '<button class="btn primary" data-act="close">Close</button></div>';
   $('modal').hidden = false;
