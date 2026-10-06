@@ -7,7 +7,7 @@ import { PAGE_METHOD } from './method.js';
 
 const BASE = new URL('../', import.meta.url).href;
 const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || (BASE.indexOf('@main/') > 0 ? 'latest' : 'stored copy');
-const VERSION = '1.4.0 · build ' + BUILD;
+const VERSION = '1.5.0'; // the only place the release number is written
 window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
@@ -19,7 +19,6 @@ const SUBS = {
   currency: [['monitor', 'Monitor'], ['lock', 'Rate lock'], ['bond', 'Export-linked bond'], ['basket', 'Currency basket'], ['voucher', 'Export vouchers']],
   method: [['sources', 'Live sources'], ['how', 'Method'], ['install', 'Install & offline'], ['about', 'About']]
 };
-const ZERO = { vatFood: 0, energy: 0, rent: 8, reserve: 0, supply: 0, transfer: 0, bonds: 0, wageIdx: 0, vatLux: 0, rate: 0 };
 const LS = {
   get: function (k) { try { return JSON.parse(localStorage.getItem('esc.' + k)); } catch (e) { return null; } },
   set: function (k, v) { try { localStorage.setItem('esc.' + k, JSON.stringify(v)); } catch (e) { /* storage full or blocked */ } }
@@ -27,13 +26,20 @@ const LS = {
 
 const st = Object.assign({
   page: 'overview', c: 'DE', role: 'all', sub: { inflation: 'diag', currency: 'monitor', method: 'sources' },
-  cmp: { ind: 'pi', sel: ['DE', 'FR', 'IT', 'ES'] }, L: Object.assign({}, ZERO), shares: null, parts: ['TOTAL', 'TOT_X_NRG_FOOD', 'NRG', 'FOOD'],
+  cmp: { ind: 'pi', sel: ['DE', 'FR', 'IT', 'ES'] }, L: Object.assign({}, M.NO_POLICY), shares: null, parts: ['TOTAL', 'TOT_X_NRG_FOOD', 'NRG', 'FOOD'],
   lib: { q: '', cat: '', fit: true }, calc: {}, theme: ''
 }, LS.get('state') || {});
 const D = {}, STATE = {};
-let jobs = [], ver = 0, snapMemo = {}, busy = 0, deferredInstall = null, online = navigator.onLine !== false;
+// Settings saved by an earlier release may lack newer entries; fill them in.
+st.L = Object.assign({}, M.NO_POLICY, st.L);
+st.sub = Object.assign({ inflation: 'diag', currency: 'monitor', method: 'sources' }, st.sub);
+let jobs = [], snapMemo = {}, busy = 0, deferredInstall = null, online = navigator.onLine !== false;
 const $ = function (id) { return document.getElementById(id); };
 const pct = function (x, dp) { return typeof x === 'number' && isFinite(x) ? fmt(x, dp) + '%' : '–'; };
+const unit = function (x, u) { return typeof x === 'number' && isFinite(x) ? fmt(x) + u : '–'; };
+const rate = function (x) { return typeof x === 'number' && isFinite(x) ? signed(x, 1) + '%' : '–'; };
+// Change in a currency's value from a loss figure (positive loss = weaker currency).
+const gain = function (loss, dp) { return typeof loss === 'number' && isFinite(loss) ? signed(-loss, dp === undefined ? 1 : dp) + '%' : '–'; };
 const signed = function (x, dp) { return typeof x === 'number' && isFinite(x) ? (x > 0 ? '+' : x < 0 ? '−' : '') + fmt(Math.abs(x), dp) : '–'; };
 function save() { LS.set('state', st); }
 function snap(c) { if (!snapMemo[c]) { const s = M.snapshot(D, c); s.diag = M.diagnose(s); snapMemo[c] = s; } return snapMemo[c]; }
@@ -62,6 +68,7 @@ function subtabs(page) {
     return '<button role="tab" aria-selected="' + (st.sub[page] === s[0]) + '" data-sub="' + s[0] + '">' + s[1] + '</button>';
   }).join('') + '</div>';
 }
+function link(target) { return target === 'overview' ? './' : '#' + target; }
 const ARROW_L = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg>', ARROW_R = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg>';
 function neighbours() {
   const i = PAGES.map(function (p) { return p.k; }).indexOf(st.page);
@@ -70,9 +77,9 @@ function neighbours() {
 function head(title, lead, extra) {
   const nb = neighbours();
   return '<div class="ph"><div class="pht"><h2>' + title + '</h2><p>' + lead + '</p>' + (extra || '') + '</div><div class="hop">' +
-    '<a class="hopb" href="./" data-go="' + nb.prev.k + '" aria-label="Back to ' + nb.prev.n + '" title="Back: ' + nb.prev.n + '">' + ARROW_L + '</a>' +
+    '<a class="hopb" href="' + link(nb.prev.k) + '" data-go="' + nb.prev.k + '" aria-label="Back to ' + nb.prev.n + '" title="Back: ' + nb.prev.n + '">' + ARROW_L + '</a>' +
     '<span>' + (nb.i + 1) + ' / ' + PAGES.length + '</span>' +
-    '<a class="hopb" href="./" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '" title="Next: ' + nb.next.n + '">' + ARROW_R + '</a></div></div>';
+    '<a class="hopb" href="' + link(nb.next.k) + '" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '" title="Next: ' + nb.next.n + '">' + ARROW_R + '</a></div></div>';
 }
 function heatStep(pi) {
   if (typeof pi !== 'number') return 'hx';
@@ -89,7 +96,7 @@ function list(rows) {
   }).join('') + '</ul>';
 }
 function range(k, v, min, max, step, group) {
-  return '<input type="range" data-' + group + '="' + k + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '" aria-label="' + esc(k) + '">';
+  return '<input type="range" data-' + group + '="' + k + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '">';
 }
 
 // ---------- Overview ----------
@@ -100,9 +107,9 @@ function pageOverview() {
     return all.filter(function (s) { return typeof f(s) === 'number'; }).sort(function (a, b) { return desc ? f(b) - f(a) : f(a) - f(b); }).slice(0, n);
   };
   const row = function (f, dp, u) { return function (s) { return { c: s.c, n: s.meta.n, v: fmt(f(s), dp) + u }; }; };
-  const map = '<div class="tilemap" role="list">' + COUNTRIES.map(function (m) {
+  const map = '<div class="tilemap">' + COUNTRIES.map(function (m) {
     const s = snap(m.c);
-    return '<button role="listitem" class="mt ' + heatStep(s.pi) + (m.c === st.c ? ' sel' : '') + '" style="grid-column:' + (m.g[0] + 1) + ';grid-row:' + (m.g[1] + 1) + '" data-country="' + m.c + '" data-open="1" title="' + esc(m.n) + ': ' + pct(s.pi) + '"><b>' + m.c + '</b><span>' + fmt(s.pi) + '</span></button>';
+    return '<button class="mt ' + heatStep(s.pi) + (m.c === st.c ? ' sel' : '') + '" style="grid-column:' + (m.g[0] + 1) + ';grid-row:' + (m.g[1] + 1) + '" data-country="' + m.c + '" data-open="1" aria-label="' + esc(m.n) + ', inflation ' + pct(s.pi) + '" title="' + esc(m.n) + ': ' + pct(s.pi) + '"><b>' + m.c + '</b><span>' + fmt(s.pi) + '</span></button>';
   }).join('') + '</div><div class="scale"><span>Below target</span><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i><i class="h5"></i><i class="h6"></i><i class="h7"></i><span>Far above</span></div>' +
     '<p class="note">Each square is a member state, placed roughly where it sits on the map. Grey means inflation is within half a point of 2%. Select a square to open the country.</p>';
   const rank = barList(all.slice().sort(function (a, b) { return (b.pi === null ? -99 : b.pi) - (a.pi === null ? -99 : a.pi); }).map(function (s) {
@@ -110,7 +117,7 @@ function pageOverview() {
   }), { unit: '%', ref: 2, refLabel: 'ECB target of 2%' });
   const fxRows = NON_EURO.map(function (m) {
     const ch = M.fxChange(D, m.cur, 252);
-    return { c: m.c, n: m.cur + ' · ' + m.n, v: fmt(M.val(D, 'fx', m.cur), m.cur === 'HUF' ? 1 : 3) + ' <small class="' + (ch > 0 ? 'neg' : 'pos') + '">' + signed(-ch, 1) + '%</small>' };
+    return { c: m.c, n: m.cur + ' · ' + m.n, v: fmt(M.val(D, 'fx', m.cur), m.cur === 'HUF' ? 1 : 3) + ' <small class="' + (ch > 0 ? 'neg' : 'pos') + '">' + gain(ch) + '</small>' };
   });
   const hs = D.hicp;
   return head('The EU economy today', 'Live official figures for all 27 member states. Start here, then open a country or a tool.',
@@ -165,7 +172,7 @@ function pageCountry() {
   const div = DIVISIONS.map(function (k) { return { label: COICOP[k], value: M.val(D, 'hicpd', k + '|' + st.c) }; }).sort(function (a, b) { return (b.value === null ? -99 : b.value) - (a.value === null ? -99 : a.value); });
   const top = s.diag.top ? M.PRESSURES.filter(function (p) { return p.k === s.diag.top; })[0] : null;
   const recs = recommend(s.diag, m, st.role).slice(0, 4);
-  return head(esc(m.n), 'Inflation is <b>' + r.n.toLowerCase() + '</b> at ' + pct(s.pi) + ' (' + periodLabel(s.piT) + ')' + (top && s.diag.p[top.k] >= 33 ? '. The strongest pressure is <b>' + top.n.toLowerCase() + '</b>.' : '. No pressure gauge is above moderate.'),
+  return head(esc(m.n), 'Inflation is <b>' + r.n.toLowerCase() + '</b> at ' + pct(s.pi) + ' (' + periodLabel(s.piT) + ')' + (top && s.diag.p[top.k] >= M.BANDS[0] ? '. The strongest pressure is <b>' + top.n.toLowerCase() + '</b>.' : '. No pressure gauge is above moderate.'),
     '<div class="pha">' + regimeChip(m) + badge(r.n, r.tone) + (s.pop ? badge(fmt(s.pop / 1e6, 1) + ' million people', 'mute') : '') + (s.gdpEur ? badge('GDP €' + fmt(s.gdpEur / 1000, 0) + ' bn', 'mute') : '') + '</div>') +
     '<div class="tiles eight">' +
     tile('Inflation', pct(s.pi), trend(s.pi, s.pi12) + ' on a year ago', Object.assign(sp('hicp', 'TOTAL|' + st.c), { tone: r.tone })) +
@@ -182,10 +189,10 @@ function pageCountry() {
         { name: m.n + ', all items', values: ea.s['TOTAL|' + st.c] || [], color: 1 }, { name: m.n + ', core', values: ea.s['TOT_X_NRG_FOOD|' + st.c] || [], color: 2 }]
         .concat(st.c === 'EA' ? [] : [{ name: 'Euro area, all items', values: ea.s['TOTAL|EA'], color: 7, dash: true }]) });
     }), { sub: 'Annual HICP rate, %', src: 'hicp' }) +
-    card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="./" data-go="inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
+    card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="#inflation/diag" data-go="inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
     '</div><div class="grid two">' +
-    card('Prices by spending category', barList(div, { unit: '%', ref: s.pi, refLabel: 'Overall inflation, ' + pct(s.pi) }) + '<h4 class="grp" style="margin-top:18px">Also watch</h4><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %', src: 'hicpd' }) +
-    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="./" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
+    card('Prices by spending category', barList(div, { unit: '%', ref: s.piDiv, refLabel: 'Overall inflation in ' + periodLabel(s.divT) + ', ' + pct(s.piDiv) }) + '<h4 class="grp" style="margin-top:18px">Also watch</h4><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %, ' + periodLabel(s.divT), src: 'hicpd' }) +
+    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="#strategies" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
     '</div>';
 }
 
@@ -196,11 +203,11 @@ function contributions(s) {
 }
 function labDiag(s) {
   const con = contributions(s), w = s.w;
-  const sens = w.FOOD + w.NRG ? (w.FOOD * (s.food || 0) + w.NRG * (s.nrg || 0)) / (w.FOOD + w.NRG) : null;
+  const sens = w.FOOD + w.NRG && typeof s.food === 'number' && typeof s.nrg === 'number' ? (w.FOOD * s.food + w.NRG * s.nrg) / (w.FOOD + w.NRG) : null;
   const inputs = [['Core inflation', pct(s.core)], ['Services inflation', pct(s.serv)], ['Energy inflation', pct(s.nrg)], ['Food inflation', pct(s.food)],
     ['Producer prices', pct(s.ppi)], ['Wage growth', pct(s.wage)], ['Unemployment vs 5-year average', pct(s.une) + ' vs ' + pct(s.uneAvg)],
     ['Real GDP growth', pct(s.gdp)], ['Rents', pct(s.rent)], ['House prices', pct(s.hpi)], ['Price expectations vs own history', typeof s.expZ === 'number' ? signed(s.expZ, 1) + ' st. dev.' : '–'],
-    [s.fxCur + ' per euro, 12-month move', typeof s.fx12 === 'number' ? signed(s.fx12, 1) + '%' : '–'], ['Energy import dependency', pct(s.nrgdep, 0)]];
+    [(s.own ? s.meta.cur : 'Euro') + ' value over 12 months, against the ' + (s.own ? 'euro' : 'US dollar'), gain(s.dep12)], ['Energy import dependency', pct(s.nrgdep, 0)]];
   return '<div class="grid two">' +
     card('Pressure diagnosis', pressures(s, true), { sub: 'Scores from 0 (none) to 100 (severe)' }) +
     '<div class="stack">' +
@@ -231,9 +238,9 @@ function personalOut() {
   const sh = st.shares || defaultShares(st.c), p = M.personal(D, st.c, sh), s = snap(st.c);
   const tot = M.BUDGET.reduce(function (a, b) { return a + (sh[b.k] || 0); }, 0);
   const worst = p.rows.filter(function (r) { return r.contrib !== null; }).sort(function (a, b) { return b.contrib - a.contrib; }).slice(0, 2);
-  const gap = p.rate !== null && s.pi !== null ? p.rate - s.pi : null;
-  return '<div class="tiles two">' + tile('Your inflation rate', pct(p.rate), 'Based on the shares you entered', { tone: gap > 0.3 ? 'warn' : gap < -0.3 ? 'good' : '' }) +
-    tile('Official rate, ' + esc(s.meta.n), pct(s.pi), gap === null ? '' : Math.abs(gap) < 0.05 ? 'The same as yours' : 'Yours is ' + fmt(Math.abs(gap), 1) + ' points ' + (gap > 0 ? 'higher' : 'lower'), {}) + '</div>' +
+  const gap = p.rate !== null && s.piDiv !== null ? p.rate - s.piDiv : null;
+  return '<div class="tiles two">' + tile('Your inflation rate', pct(p.rate), 'Category prices for ' + periodLabel(s.divT), { tone: gap > 0.3 ? 'warn' : gap < -0.3 ? 'good' : '' }) +
+    tile('Official rate, ' + esc(s.meta.n), pct(s.piDiv), gap === null ? '' : Math.abs(gap) < 0.05 ? 'The same as yours' : 'Yours is ' + fmt(Math.abs(gap), 1) + ' points ' + (gap > 0 ? 'higher' : 'lower'), {}) + '</div>' +
     barList(p.rows.filter(function (r) { return r.share > 0; }).sort(function (a, b) { return (b.contrib || 0) - (a.contrib || 0); }).map(function (r) { return { label: r.n, value: r.contrib }; }), { unit: ' pp', dp: 2 }) +
     '<p class="note">' + (worst.length ? 'Most of your rate comes from <b>' + worst.map(function (r) { return r.n.toLowerCase() + ' (' + pct(r.rate) + ')'; }).join('</b> and <b>') + '</b>. Substituting or timing purchases in these areas has the most effect. ' : '') +
     'Your shares add up to ' + tot + '%; they are rescaled to 100%.</p>';
@@ -241,7 +248,7 @@ function personalOut() {
 function labPersonal(s) {
   const sh = st.shares || defaultShares(st.c);
   return '<div class="grid two">' + card('Your monthly spending', '<div class="sliders">' + M.BUDGET.map(function (b) {
-    return '<label><span>' + b.n + '<small>prices ' + signed(M.val(D, 'hicpd', b.k + '|' + st.c), 1) + '%</small></span>' + range(b.k, sh[b.k] || 0, 0, 60, 1, 'share') + '<output>' + (sh[b.k] || 0) + '%</output></label>';
+    return '<label><span>' + b.n + '<small>prices ' + rate(M.val(D, 'hicpd', b.k + '|' + st.c)) + '</small></span>' + range(b.k, sh[b.k] || 0, 0, 60, 1, 'share') + '<output>' + (sh[b.k] || 0) + '%</output></label>';
   }).join('') + '</div><button class="btn" data-act="resetShares">Reset to the national average</button>', { sub: 'Set the share of your budget that goes to each category' }) +
     card('Your result', '<div id="out">' + personalOut() + '</div>', { sub: 'How price changes hit your own basket', src: ['hicpd', 'hicpw'] }) + '</div>';
 }
@@ -272,7 +279,7 @@ function labOutlook(s) {
   return '<div class="grid two">' + card('Six-month projection', tiles + body + '<p class="note">The shaded band is how far this simple rule has missed in the past for ' + esc(s.meta.n) + '. It is a momentum signal, not an official forecast.</p>', { sub: 'Annual HICP rate, %', src: 'hicp' }) +
     card('Pressure in the pipeline', '<div class="tw"><table><thead><tr><th>Leading indicator</th><th>Now</th><th>Earlier</th><th>Signal</th></tr></thead><tbody>' + pipe.map(function (r) {
       const d = typeof r[1] === 'number' && typeof r[2] === 'number' ? r[1] - r[2] : null;
-      return '<tr><td><b>' + r[0] + '</b><br><small>' + r[4] + '</small></td><td>' + fmt(r[1]) + r[3] + '</td><td>' + fmt(r[2]) + r[3] + '</td><td>' + (d === null ? '–' : d > 0.2 ? badge('Building', 'warn') : d < -0.2 ? badge('Easing', 'good') : badge('Steady', 'mute')) + '</td></tr>';
+      return '<tr><td><b>' + r[0] + '</b><br><small>' + r[4] + '</small></td><td>' + unit(r[1], r[3]) + '</td><td>' + unit(r[2], r[3]) + '</td><td>' + (d === null ? '–' : d > 0.2 ? badge('Building', 'warn') : d < -0.2 ? badge('Easing', 'good') : badge('Steady', 'mute')) + '</td></tr>';
     }).join('') + '</tbody></table></div><p class="note">“Earlier” is three months back, or one quarter for wages and house prices. Signals show direction only.</p>', { sub: 'Indicators that tend to move before consumer prices', src: ['ppi', 'wages', 'expect'] }) + '</div>';
 }
 function pageInflation() {
@@ -288,8 +295,7 @@ function field(calc, k, label, v, o) {
   return '<label class="fld"><span>' + label + '</span><span class="inp"><input type="number" inputmode="decimal" data-calc="' + calc + '" data-k="' + k + '" value="' + v + '" step="' + (o.step || 'any') + '"' + (o.min !== undefined ? ' min="' + o.min + '"' : '') + '><em>' + (o.unit || '') + '</em></span></label>';
 }
 function curMonitor(s) {
-  const m = s.meta, own = !m.euro && !m.agg, fx = D.fx, arr = fx ? fx.s[s.fxCur] : null;
-  const ch1 = M.fxChange(D, s.fxCur, 21);
+  const m = s.meta, own = s.own, fx = D.fx, arr = fx ? fx.s[s.fxCur] : null;
   let peg = '';
   if (m.peg && s.fxRate) {
     const dev = (s.fxRate / m.peg - 1) * 100;
@@ -298,12 +304,12 @@ function curMonitor(s) {
   const ext = [['Current account', s.ca, '% of GDP'], ['Exports of goods and services', s.xGdp, '% of GDP'], ['Imports of goods and services', s.mGdp, '% of GDP'], ['Export growth, latest year', s.xGrowth, '%'], ['Energy import dependency', s.nrgdep, '%']];
   const tbl = NON_EURO.map(function (x) {
     const c1 = M.fxChange(D, x.cur, 21), c12 = M.fxChange(D, x.cur, 252), v = M.fxVol(M.series(D, 'fx', x.cur), 90);
-    return '<tr data-country="' + x.c + '" tabindex="0"><td><b>' + x.n + '</b><br><small>' + x.regime + '</small></td><td>' + x.cur + '</td><td>' + fmt(M.val(D, 'fx', x.cur), 3) + '</td><td>' + signed(-c1, 1) + '%</td><td>' + signed(-c12, 1) + '%</td><td>' + pct(v) + '</td></tr>';
+    return '<tr data-country="' + x.c + '" tabindex="0"><td><b>' + x.n + '</b><br><small>' + x.regime + '</small></td><td>' + x.cur + '</td><td>' + fmt(M.val(D, 'fx', x.cur), 3) + '</td><td>' + gain(c1) + '</td><td>' + gain(c12) + '</td><td>' + pct(v) + '</td></tr>';
   }).join('');
   return '<div class="tiles four">' +
     tile('Currency', m.cur || 'EUR', own ? m.regime : m.agg ? 'Single currency' : 'Euro area member since ' + m.euro, {}) +
     tile(own ? s.fxCur + ' per euro' : 'US dollars per euro', fmt(s.fxRate, s.fxRate > 100 ? 1 : 4), fx ? periodLabel(fx.t[fx.t.length - 1]) : '', {}) +
-    tile((own ? m.cur : 'Euro') + ' over 12 months', typeof s.fx12 === 'number' ? signed(-s.fx12, 1) + '%' : '–', 'Against ' + (own ? 'the euro' : 'the US dollar') + ' · 1 month ' + (typeof ch1 === 'number' ? signed(-ch1, 1) + '%' : '–'), { tone: s.fx12 > 5 ? 'warn' : '' }) +
+    tile((own ? m.cur : 'Euro') + ' over 12 months', gain(s.dep12), 'Against ' + (own ? 'the euro' : 'the US dollar') + ' · 1 month ' + gain(s.dep1), { tone: s.dep12 > 5 ? 'warn' : '' }) +
     tile('Volatility', pct(s.fxVol), 'Annualised, last 90 trading days', { tone: s.fxVol > 10 ? 'warn' : '' }) +
     '</div><div class="grid two">' +
     card(own ? s.fxCur + ' per euro' : 'US dollars per euro', chart(function (el) {
@@ -320,7 +326,7 @@ function lockOut() {
     '<p class="note">The saving to the importer is exactly the cost to the provider. A central bank or promotional bank offering locks must price them at market or cap the volume, otherwise the currency risk moves to the public balance sheet.</p>';
 }
 function curLock(s) {
-  const own = !s.meta.euro && !s.meta.agg, spot = own ? s.fxRate : s.fxRate ? 1 / s.fxRate : 1;
+  const own = s.own, spot = own ? s.fxRate : s.fxRate ? 1 / s.fxRate : 1;
   const a = calcState('lock', { bill: 10, spot: +(spot || 1).toFixed(4), lock: +(spot || 1).toFixed(4), move: 10, home: own ? s.meta.cur : 'EUR', fcy: own ? 'EUR' : 'USD' });
   return '<div class="grid two">' + card('Set up the lock', '<div class="form">' + field('lock', 'bill', 'Import bill', a.bill, { unit: 'm ' + a.fcy, min: 0 }) + field('lock', 'spot', 'Today’s rate', a.spot, { unit: a.home + ' per ' + a.fcy }) +
     field('lock', 'lock', 'Locked rate', a.lock, { unit: a.home + ' per ' + a.fcy }) + field('lock', 'move', 'Scenario: ' + a.home + ' weakens by', a.move, { unit: '%' }) + '</div><p class="note">An importer agrees today the rate it will pay for foreign currency over the coming year. Today’s rate is filled in from the live ECB reference rate.</p>', { sub: 'Exchange rate lock for an importer in ' + esc(s.meta.n) }) +
@@ -379,7 +385,7 @@ const PRESETS = {
   supply: { n: 'Supply first', L: { reserve: 4, supply: 0.8, bonds: 0.5 } },
   balanced: { n: 'Funded and targeted', L: { transfer: 0.6, vatLux: 2, bonds: 1, reserve: 2 } }
 };
-function leverLabel(l, v) { return l.k === 'rent' && v >= 8 ? 'No cap' : (l.k === 'rate' && v > 0 ? '+' : '') + v + ' ' + l.unit; }
+function leverLabel(l, v) { return l.off !== undefined && v >= l.off ? 'No cap' : (l.min < 0 && v > 0 ? '+' : '') + v + l.unit; }
 function simOut() {
   const s = snap(st.c), r = M.simulate(s, st.L), after = r.pi + r.mid;
   const names = {}; M.LEVERS.forEach(function (l) { names[l.k] = l; });
@@ -406,7 +412,7 @@ function pageSimulator() {
   return head('Policy Simulator · ' + esc(s.meta.n), 'Combine measures and see their estimated first-year effect on inflation, the budget and growth.') +
     '<div class="chipset">' + Object.keys(PRESETS).map(function (k) { return '<button class="chip" data-act="preset" data-k="' + k + '">' + PRESETS[k].n + '</button>'; }).join('') + '<button class="chip" data-act="preset" data-k="">Clear all</button></div>' +
     '<div class="grid two">' + card('Measures', left, { sub: 'Set the size of each measure' }) +
-    card('Estimated effect', '<div id="out">' + simOut() + '</div><p class="note">These are stylised estimates from published rules of thumb, shown with a range. They are a guide for comparing options, not a forecast. Every assumption is listed under <a href="./" data-go="method/how">Data & Method</a>.</p>', { sub: 'Starting from live figures for ' + esc(s.meta.n), src: ['hicp', 'hicpw', 'fiscal'], cls: 'sticky' }) + '</div>';
+    card('Estimated effect', '<div id="out">' + simOut() + '</div><p class="note">These are stylised estimates from published rules of thumb, shown with a range. They are a guide for comparing options, not a forecast. Every assumption is listed under <a href="#method/how" data-go="method/how">Data & Method</a>.</p>', { sub: 'Starting from live figures for ' + esc(s.meta.n), src: ['hicp', 'hicpw', 'fiscal'], cls: 'sticky' }) + '</div>';
 }
 
 // ---------- Strategies ----------
@@ -472,8 +478,8 @@ function pageMethod() {
       const b = stt === 'live' ? badge('Live', 'good') : stt === 'error' ? badge(e ? 'Using saved copy' : 'Unavailable', e ? 'warn' : 'crit') : stt === 'loading' ? badge('Updating', 'info') : badge(e && e.at ? 'Saved copy' : 'Baseline', 'mute');
       return '<tr><td><a href="' + sourceUrl(id) + '" target="_blank" rel="noopener"><b>' + d.label + '</b></a>' + (d.code ? '<br><small>' + d.code + '</small>' : e && e.via ? '<br><small>via ' + esc(e.via) + '</small>' : '') + '</td><td>' + esc(d.src) + '</td><td>' + d.freq + '</td><td>' + (e ? periodLabel(e.t[e.t.length - 1]) : '–') + '</td><td>' + (e ? ago(e.at) : '–') + '</td><td>' + b + '</td></tr>';
     }).join('') + '</tbody></table></div><div class="actions"><button class="btn primary" data-act="refresh">Refresh all now</button><button class="btn" data-act="download">Download the data (JSON)</button><button class="btn" data-act="csv">Download ' + esc(nameOf(st.c)) + ' summary (CSV)</button></div>' +
-      '<p class="note">Your browser fetches every figure directly from the publisher each time you open the tool and again while it stays open: exchange rates hourly, monthly statistics every six hours. Nothing passes through a private server. When you are offline the tool shows the copy saved on this device.</p>', { sub: 'Sixteen official feeds, updated automatically' });
-  } else body = PAGE_METHOD(sub, { VERSION: VERSION, card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
+      '<p class="note">Your browser fetches every figure directly from the publisher each time you open the tool and again while it stays open: exchange rates hourly, monthly statistics every six hours. Nothing passes through a private server. When you are offline the tool shows the copy saved on this device.</p>', { sub: ALL_IDS.length + ' official feeds, updated automatically' });
+  } else body = PAGE_METHOD(sub, { VERSION: VERSION + ' · build ' + BUILD, card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
   return head('Data & Method', 'Where every number comes from, how the gauges and estimates are built, and how to install the tool.') + subtabs('method') + body;
 }
 
@@ -489,10 +495,10 @@ function render(keepScroll) {
   app.innerHTML = html;
   draw();
   const nb = neighbours(), i = nb.i, prev = nb.prev, next = nb.next;
-  $('nav').innerHTML = PAGES.map(function (p, j) { return '<a href="./" data-go="' + p.k + '"' + (p.k === st.page ? ' aria-current="page"' : '') + '><i>' + (j + 1) + '</i>' + p.n + '</a>'; }).join('');
-  $('pager').innerHTML = '<a class="pg prev" href="./" data-go="' + prev.k + '" aria-label="Back to ' + prev.n + '"><span class="arr">' + ARROW_L + '</span><span class="pgl"><small>Back</small><b>' + prev.n + '</b></span></a>' +
-    '<span class="dots" aria-label="Page ' + (i + 1) + ' of ' + PAGES.length + '">' + PAGES.map(function (p, j) { return '<a href="./" data-go="' + p.k + '" title="' + p.n + '"' + (j === i ? ' class="on"' : '') + '></a>'; }).join('') + '</span>' +
-    '<a class="pg next" href="./" data-go="' + next.k + '" aria-label="Forward to ' + next.n + '"><span class="pgl"><small>Next</small><b>' + next.n + '</b></span><span class="arr">' + ARROW_R + '</span></a>';
+  $('nav').innerHTML = PAGES.map(function (p, j) { return '<a href="' + link(p.k) + '" data-go="' + p.k + '"' + (p.k === st.page ? ' aria-current="page"' : '') + '><i>' + (j + 1) + '</i>' + p.n + '</a>'; }).join('');
+  $('pager').innerHTML = '<a class="pg prev" href="' + link(prev.k) + '" data-go="' + prev.k + '" aria-label="Back to ' + prev.n + '"><span class="arr">' + ARROW_L + '</span><span class="pgl"><small>Back</small><b>' + prev.n + '</b></span></a>' +
+    '<span class="dots" aria-label="Page ' + (i + 1) + ' of ' + PAGES.length + '">' + PAGES.map(function (p, j) { return '<a href="' + link(p.k) + '" data-go="' + p.k + '" title="' + p.n + '"' + (j === i ? ' class="on"' : '') + '></a>'; }).join('') + '</span>' +
+    '<a class="pg next" href="' + link(next.k) + '" data-go="' + next.k + '" aria-label="Forward to ' + next.n + '"><span class="pgl"><small>Next</small><b>' + next.n + '</b></span><span class="arr">' + ARROW_R + '</span></a>';
   const cur = $('nav').querySelector('[aria-current]');
   if (cur && cur.scrollIntoView && !keepScroll) { try { cur.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* older browsers */ } }
   $('csel').value = st.c; $('rsel').value = st.role;
@@ -533,7 +539,9 @@ document.addEventListener('click', function (e) {
   if (ds.sub) { go(st.page, ds.sub); return; }
   if (ds.country) { if (ds.open) { st.c = ds.country; st.shares = null; go('country', ds.country); } else if (st.page === 'compare') { toggleCmp(ds.country); } else setCountry(ds.country); return; }
   const a = ds.act;
-  if (a === 'preset') { st.L = Object.assign({}, ZERO, ds.k ? PRESETS[ds.k].L : {}); render(true); }
+  if (t.tagName === 'A') e.preventDefault();
+  if (a === 'skip') { $('app').focus(); return; }
+  if (a === 'preset') { st.L = Object.assign({}, M.NO_POLICY, ds.k ? PRESETS[ds.k].L : {}); render(true); }
   else if (a === 'part') { const i = st.parts.indexOf(ds.k); if (i >= 0) { if (st.parts.length > 1) st.parts.splice(i, 1); } else st.parts.push(ds.k); render(true); }
   else if (a === 'cmp') toggleCmp(ds.k);
   else if (a === 'resetShares') { st.shares = null; render(true); }
@@ -541,12 +549,13 @@ document.addEventListener('click', function (e) {
   else if (a === 'download') download('eu-stability-compass-data.json', JSON.stringify({ exported: new Date().toISOString(), datasets: D }), 'application/json');
   else if (a === 'csv') download('summary-' + st.c + '.csv', csvSummary(), 'text/csv');
   else if (a === 'install') install();
-  else if (a === 'close') $('modal').hidden = true;
+  else if (a === 'close') closeModal();
   else if (a === 'reload') location.reload();
 });
 function toggleCmp(c) { const s = st.cmp.sel, i = s.indexOf(c); if (i >= 0) { if (s.length > 1) s.splice(i, 1); } else { s.push(c); if (s.length > 4) s.shift(); } render(true); }
 document.addEventListener('keydown', function (e) {
   const t = e.target;
+  if (e.key === 'Escape' && !$('modal').hidden) { closeModal(); return; }
   if (e.key === 'Enter' && t.dataset && t.dataset.country) { t.click(); return; }
   if (/INPUT|SELECT|TEXTAREA/.test(t.tagName) || e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.key === 'ArrowRight') go(neighbours().next.k);
@@ -603,7 +612,7 @@ function refresh(ids, force) {
   return Promise.all(todo.map(function (id) {
     return fetchDataset(id).then(function (o) { D[id] = o; STATE[id] = 'live'; LS.set('d.' + id, o); }, function () { STATE[id] = 'error'; });
   })).then(function () {
-    busy--; ver++; snapMemo = {}; status();
+    busy--; snapMemo = {}; status();
     const act = document.activeElement;
     if (act && /INPUT|SELECT/.test(act.tagName) && $('app').contains(act)) { if (st.page === 'method') render(true); return; }
     render(true);
@@ -646,11 +655,13 @@ function install() {
     (isStandalone() ? '<p>You are using the installed app. It opens without a browser and works offline.</p>' : '<ol>' + steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol><p class="note">Once installed, the tool opens from your home screen or desktop and keeps working in aeroplane mode with the last data it fetched.</p>') +
     '<button class="btn primary" data-act="close">Close</button></div>';
   $('modal').hidden = false;
+  $('modal').querySelector('.btn').focus();
 }
 window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; $('install').classList.add('ready'); });
 window.addEventListener('appinstalled', function () { deferredInstall = null; $('install').hidden = true; });
 $('install').addEventListener('click', install);
-$('modal').addEventListener('click', function (e) { if (e.target === $('modal')) $('modal').hidden = true; });
+$('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeModal(); });
+function closeModal() { $('modal').hidden = true; $('install').focus(); }
 if (isStandalone()) $('install').hidden = true;
 
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

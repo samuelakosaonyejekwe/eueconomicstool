@@ -31,7 +31,12 @@ function meanLast(a, n) {
   return v.length ? v.reduce(function (x, y) { return x + y; }, 0) / v.length : null;
 }
 
-// Percentage move of `cur` against the euro over roughly `days` trading days (positive = currency weakened).
+// A quote is "units of cur per euro". For a member with its own currency a rise means that
+// currency lost value; for the euro (quoted in dollars) a rise means the euro gained value.
+export function homeLoss(move, own) { return num(move) ? (own ? move : (1 / (1 + move / 100) - 1) * 100) : null; }
+export const WAGE_NORM = 3; // pay growth consistent with 2% inflation plus about 1% productivity growth
+
+// Percentage move of the `cur`-per-euro quote over roughly `days` trading days.
 export function fxChange(D, cur, days) {
   const a = series(D, 'fx', cur);
   if (!a) return null;
@@ -89,9 +94,21 @@ export function snapshot(D, c) {
   }
   const cur = meta.euro || meta.agg ? 'USD' : meta.cur;
   s.fxCur = cur;
+  s.own = !meta.euro && !meta.agg;
   s.fxRate = val(D, 'fx', cur);
-  s.fx12 = fxChange(D, cur, 252);
   s.fxVol = fxVol(series(D, 'fx', cur), 90);
+  // dep12 / dep1: percentage fall in the value of the home currency (positive = weaker).
+  // Non-euro members are measured against the euro, euro members against the US dollar.
+  s.dep12 = homeLoss(fxChange(D, cur, 252), s.own);
+  s.dep1 = homeLoss(fxChange(D, cur, 21), s.own);
+  s.uneGap = num(s.une) && num(s.uneAvg) ? s.uneAvg - s.une : null;
+  s.wageGap = num(s.wage) ? s.wage - WAGE_NORM : null;
+  // Category detail is published later than the headline flash estimate, so keep the
+  // headline for the same month as the category data for like-for-like comparisons.
+  const dv = latest(D, 'hicpd', 'CP01|' + c);
+  s.divT = dv ? dv.t : '';
+  const hi = D.hicp && dv ? D.hicp.t.indexOf(dv.t) : -1, tot = series(D, 'hicp', 'TOTAL|' + c);
+  s.piDiv = hi >= 0 && tot && num(tot[hi]) ? tot[hi] : null;
   return s;
 }
 
@@ -104,29 +121,38 @@ export const PRESSURES = [
   { k: 'exp', n: 'Expectations', d: 'Households expecting faster price rises than usual, which can become self-fulfilling.' }
 ];
 
-function blend(parts) {
-  let w = 0, x = 0;
-  parts.forEach(function (p) { if (num(p[1])) { w += p[0]; x += p[0] * p[1]; } });
-  return w ? Math.round(100 * x / w) : null;
-}
+// Gauge definitions: the single source for both the calculation and the Method page.
+// Each term is [weight, [[indicator, value scoring 0, value scoring 100, label, unit], ...]];
+// a term with two indicators scores their product.
+export const GAUGES = {
+  dem: [[0.40, [['core', 2, 6, 'core inflation', '%']]], [0.25, [['serv', 2.5, 7, 'services inflation', '%']]], [0.20, [['gdp', 1, 4, 'real GDP growth', '%']]],
+    [0.15, [['uneGap', 0, 2, 'unemployment below its five-year average', ' points']]]],
+  cost: [[0.40, [['nrg', 2, 20, 'energy inflation', '%']]], [0.30, [['ppi', 2, 15, 'producer price inflation', '%']]], [0.30, [['food', 2, 10, 'food inflation', '%']]]],
+  imp: [[0.35, [['dep12', 0, 10, 'twelve-month fall in the home currency', '%']]],
+    [0.35, [['nrgdep', 30, 90, 'energy import dependency', '%'], ['nrg', 2, 20, 'energy inflation', '%']]],
+    [0.30, [['mGdp', 30, 90, 'imports as a share of GDP', '%'], ['ppi', 2, 15, 'producer price inflation', '%']]]],
+  wage: [[0.60, [['wageGap', 0, 6, 'wage growth above ' + WAGE_NORM + '%', ' points']]], [0.40, [['serv', 2.5, 7, 'services inflation', '%']]]],
+  hou: [[0.50, [['rent', 2, 8, 'rent inflation', '%']]], [0.50, [['hpi', 3, 12, 'house price growth', '%']]]],
+  exp: [[1, [['expZ', 0, 2, 'household price expectations above their own average since 2015', ' standard deviations']]]]
+};
+export const HEAT_WEIGHTS = { dem: 0.25, cost: 0.25, imp: 0.15, wage: 0.15, hou: 0.10, exp: 0.10 };
+export const BANDS = [33, 66]; // below the first: Low; from the second: High
 
 export function diagnose(s) {
-  const gap = num(s.une) && num(s.uneAvg) ? s.uneAvg - s.une : null;
-  const n = function (x, lo, hi) { return num(x) ? lin(x, lo, hi) : null; };
-  const mul = function (a, b) { return num(a) && num(b) ? a * b : null; };
-  const p = {
-    dem: blend([[0.40, n(s.core, 2, 6)], [0.25, n(s.serv, 2.5, 7)], [0.20, n(s.gdp, 1, 4)], [0.15, n(gap, 0, 2)]]),
-    cost: blend([[0.40, n(s.nrg, 2, 20)], [0.30, n(s.ppi, 2, 15)], [0.30, n(s.food, 2, 10)]]),
-    imp: blend([[0.35, n(s.fx12, 0, 10)], [0.35, mul(n(s.nrgdep, 30, 90), n(s.nrg, 2, 20))], [0.30, mul(n(s.mGdp, 30, 90), n(s.ppi, 2, 15))]]),
-    wage: blend([[0.60, n(num(s.wage) ? s.wage - 3 : null, 0, 6)], [0.40, n(s.serv, 2.5, 7)]]),
-    hou: blend([[0.50, n(s.rent, 2, 8)], [0.50, n(s.hpi, 3, 12)]]),
-    exp: blend([[1, n(s.expZ, 0, 2)]])
-  };
-  const wts = { dem: 0.25, cost: 0.25, imp: 0.15, wage: 0.15, hou: 0.10, exp: 0.10 };
+  const p = {};
+  Object.keys(GAUGES).forEach(function (k) {
+    let w = 0, x = 0;
+    GAUGES[k].forEach(function (term) {
+      let v = 1;
+      term[1].forEach(function (f) { v = v === null || !num(s[f[0]]) ? null : v * lin(s[f[0]], f[1], f[2]); });
+      if (v !== null) { w += term[0]; x += term[0] * v; }
+    });
+    p[k] = w ? Math.round(100 * x / w) : null; // missing indicators: remaining weights are rescaled
+  });
   let tw = 0, tx = 0, top = null;
   Object.keys(p).forEach(function (k) {
     if (p[k] === null) return;
-    tw += wts[k]; tx += wts[k] * p[k];
+    tw += HEAT_WEIGHTS[k]; tx += HEAT_WEIGHTS[k] * p[k];
     if (!top || p[k] > p[top]) top = k;
   });
   return { p: p, heat: tw ? Math.round(tx / tw) : null, top: top, regime: regime(s.pi) };
@@ -142,7 +168,7 @@ export function regime(pi) {
   return { k: 'vhigh', n: 'Very high', tone: 'crit' };
 }
 
-export function level(score) { return score === null ? 'n/a' : score >= 66 ? 'High' : score >= 33 ? 'Moderate' : 'Low'; }
+export function level(score) { return score === null ? 'n/a' : score >= BANDS[1] ? 'High' : score >= BANDS[0] ? 'Moderate' : 'Low'; }
 
 // --- Short-horizon projection ------------------------------------------------
 // A deliberately simple, fully disclosed rule: recent momentum that fades, plus a
@@ -198,27 +224,43 @@ export function personal(D, c, shares) {
 }
 
 // --- Policy simulator --------------------------------------------------------
+// Every coefficient lives in K. simulate() reads it and the Method page prints it,
+// so the published assumptions cannot drift from the calculation. Triples are
+// [low, central, high].
+export const K = {
+  vatCut: [0.30, 0.60, 0.90], taxRise: [0.60, 0.80, 1.00], energyPass: [0.80, 1.00, 1.00], energyFloor: 5,
+  demand: [0.05, 0.15, 0.30], spendTransfer: 0.70, bondDivert: 0.40,
+  reserve: [0.3, 0.8, 1.5], reserveBase: 0.30, reserveCarry: 0.02,
+  supply: [0, 0.10, 0.25], supplyDemand: 0.50, wage: [0.05, 0.15, 0.30],
+  rate: [0.10, 0.30, 0.50], rateGdp: [0.20, 0.40, 0.60],
+  lowShare: 0.15, gdpTransfer: 0.5, gdpSupply: 0.3, gdpBonds: 0.2, gdpTax: 0.3, consumptionDefault: 52
+};
+const f2 = function (x) { return x.toFixed(2); };
+const rng = function (t, unit, sign) { return (sign || '') + f2(t[0]) + ' – ' + (sign || '') + f2(t[2]) + (unit || ''); };
 export const ASSUMPTIONS = [
-  ['VAT cut pass-through to shelf prices', '0.60', '0.30 – 0.90', 'Cuts are passed on less fully than increases.'],
-  ['VAT / excise increase pass-through', '0.80', '0.60 – 1.00', ''],
-  ['Energy support pass-through to consumer bills', '1.00', '0.80 – 1.00', 'Applied only to energy inflation above 5%.'],
-  ['Inflation response to a demand change of 1% of GDP', '0.15 pp', '0.05 – 0.30 pp', 'First-year effect; flatter or steeper Phillips curve at the ends of the range.'],
-  ['Share of a targeted transfer that is spent', '0.70', '—', 'Low-income households spend most of an extra euro.'],
-  ['Share of retail-bond purchases diverted from spending', '0.40', '—', 'The rest replaces other saving.'],
-  ['Strategic stock release: staple price effect per 1% of annual use released', '−0.8%', '−0.3% – −1.5%', 'Applied to 30% of the food and energy basket.'],
-  ['Supply-side incentives: first-year price effect per 1% of GDP', '−0.10 pp', '0 – −0.25 pp', 'Most of the effect arrives after the first year.'],
-  ['Wage indexation second-round effect', '0.15', '0.05 – 0.30', 'Share of above-target inflation fed back per unit of coverage.'],
-  ['Policy rate: inflation effect per +100 basis points', '−0.30 pp', '−0.10 – −0.50 pp', 'Peak effect after 12–24 months.'],
-  ['Policy rate: GDP effect per +100 basis points', '−0.40%', '−0.20 – −0.60%', ''],
-  ['Low-income households (bottom 30%) share of consumption', '15%', '—', 'Used to express transfers as a share of their spending.']
+  ['VAT cut pass-through to shelf prices', f2(K.vatCut[1]), rng(K.vatCut), 'Cuts are passed on less fully than increases.'],
+  ['Consumption-tax increase pass-through', f2(K.taxRise[1]), rng(K.taxRise), ''],
+  ['Energy support pass-through to consumer bills', f2(K.energyPass[1]), rng(K.energyPass), 'Applied only to energy inflation above ' + K.energyFloor + '%.'],
+  ['Inflation response to a demand change of 1% of GDP', f2(K.demand[1]) + ' pp', rng(K.demand, ' pp'), 'First-year effect; flatter or steeper price response at the ends of the range.'],
+  ['Share of a targeted transfer that is spent', f2(K.spendTransfer), '—', 'Low-income households spend most of an extra euro.'],
+  ['Share of retail-bond purchases diverted from spending', f2(K.bondDivert), '—', 'The rest replaces other saving.'],
+  ['Strategic stock release: staple price fall per 1% of annual use released', f2(K.reserve[1]) + '%', rng(K.reserve, '%'), 'Applied to ' + Math.round(K.reserveBase * 100) + '% of the food and energy basket. Carrying cost ' + f2(K.reserveCarry) + '% of GDP per 1% released.'],
+  ['Supply-side incentives: first-year price fall per 1% of GDP', f2(K.supply[1]) + ' pp', rng(K.supply, ' pp'), 'Half of the outlay also adds to demand in year one. Most of the supply effect arrives later.'],
+  ['Wage indexation second-round effect', f2(K.wage[1]), rng(K.wage), 'Share of above-target inflation fed back, per unit of coverage.'],
+  ['Policy rate: inflation fall per +100 basis points', f2(K.rate[1]) + ' pp', rng(K.rate, ' pp'), 'Peak effect after 12–24 months.'],
+  ['Policy rate: GDP fall per +100 basis points', f2(K.rateGdp[1]) + '%', rng(K.rateGdp, '%'), ''],
+  ['Low-income households (bottom 30%) share of consumption', Math.round(K.lowShare * 100) + '%', '—', 'Used to express transfers as a share of their spending.'],
+  ['First-year GDP effect per 1% of GDP: transfers / supply incentives', '+' + f2(K.gdpTransfer) + '% / +' + f2(K.gdpSupply) + '%', '—', 'Simple multipliers.'],
+  ['First-year GDP effect per 1% of GDP: bond take-up / higher consumption tax', '−' + f2(K.gdpBonds) + '% / −' + f2(K.gdpTax) + '%', '—', 'Simple multipliers.'],
+  ['Household consumption as a share of GDP when not published', K.consumptionDefault + '%', '—', 'Otherwise the country’s own figure from Eurostat is used.']
 ];
 
 export const LEVERS = [
-  { k: 'vatFood', n: 'Cut VAT on food essentials', unit: 'pp', max: 10, step: 0.5, grp: 'Prices',
+  { k: 'vatFood', n: 'Cut VAT on food essentials', unit: ' pp', max: 10, step: 0.5, grp: 'Prices',
     d: 'Lower the VAT rate on basic foodstuffs.', law: 'Allowed: the VAT Directive (as amended by Directive (EU) 2022/542) permits reduced and zero rates on foodstuffs.' },
-  { k: 'energy', n: 'Absorb energy price growth above 5%', unit: '%', max: 100, step: 5, grp: 'Prices',
-    d: 'The state covers this share of energy price growth above 5% a year, through a bill cap or rebate.', law: 'Design within State-aid rules and keep an incentive to save energy; target vulnerable users where possible.' },
-  { k: 'rent', n: 'Limit annual rent increases', unit: '% cap', max: 8, step: 0.5, off: 8, invert: true, grp: 'Prices',
+  { k: 'energy', n: 'Absorb energy price growth above ' + K.energyFloor + '%', unit: '%', max: 100, step: 5, grp: 'Prices',
+    d: 'The state covers this share of energy price growth above ' + K.energyFloor + '% a year, through a bill cap or rebate.', law: 'Design within State-aid rules and keep an incentive to save energy; target vulnerable users where possible.' },
+  { k: 'rent', n: 'Limit annual rent increases', unit: '% cap', max: 8, step: 0.5, off: 8, grp: 'Prices',
     d: 'Rents may rise by at most this much a year. 8% means no cap.', law: 'National competence. Tight caps can reduce rental supply over time.' },
   { k: 'reserve', n: 'Release strategic stocks', unit: '% of use', max: 10, step: 0.5, grp: 'Supply',
     d: 'Release food and energy reserves equal to this share of annual consumption.', law: 'Oil stocks are governed by Directive 2009/119/EC. Restricting exports to other member states is barred by Article 35 TFEU.' },
@@ -230,58 +272,56 @@ export const LEVERS = [
     d: 'Household take-up of government bonds whose return tracks inflation.', law: 'National debt-management decision. Indexation cost rises with inflation.' },
   { k: 'wageIdx', n: 'Automatic wage indexation coverage', unit: '% of pay', max: 100, step: 5, grp: 'Households',
     d: 'Share of the wage bill that rises automatically with inflation.', law: 'Social partners’ and national competence. Belgium, Luxembourg, Malta and Cyprus run such systems.' },
-  { k: 'vatLux', n: 'Raise consumption tax on non-essentials', unit: 'pp', max: 5, step: 0.5, grp: 'Revenue',
+  { k: 'vatLux', n: 'Raise consumption tax on non-essentials', unit: ' pp', max: 5, step: 0.5, grp: 'Revenue',
     d: 'Higher tax on clothing, leisure and restaurants; helps fund relief.', law: 'The VAT Directive allows only one standard rate, so a separate luxury rate is not available: move items out of reduced rates or use excise duties.' },
-  { k: 'rate', n: 'Change the policy interest rate', unit: 'bp', min: -200, max: 200, step: 25, grp: 'Monetary',
+  { k: 'rate', n: 'Change the policy interest rate', unit: ' bp', min: -200, max: 200, step: 25, grp: 'Monetary',
     d: 'Tighten or loosen monetary policy.', law: 'Decided independently by the central bank (Article 130 TFEU). In the euro area this is the ECB, for all members at once.' }
 ];
+export const NO_POLICY = {};
+LEVERS.forEach(function (l) { NO_POLICY[l.k] = l.off === undefined ? 0 : l.off; });
 
 export function simulate(s, L) {
-  const w = s.w, c = (num(s.cGdp) ? s.cGdp : 52) / 100, pi = num(s.pi) ? s.pi : 2;
+  const w = s.w, c = (num(s.cGdp) ? s.cGdp : K.consumptionDefault) / 100, pi = num(s.pi) ? s.pi : 2;
   const rows = [], flags = [];
-  const add = function (k, lo, mid, hi, cost, gdp, note) {
-    rows.push({ k: k, lo: Math.min(lo, hi), mid: mid, hi: Math.max(lo, hi), cost: cost, gdp: gdp || 0, note: note || '' });
+  // t: [low, central, high] effect on inflation in percentage points.
+  const add = function (k, t, cost, gdp, note) {
+    rows.push({ k: k, lo: Math.min(t[0], t[1], t[2]), mid: t[1], hi: Math.max(t[0], t[1], t[2]), cost: cost, gdp: gdp || 0, note: note || '' });
   };
+  const times = function (t, x) { return t.map(function (v) { return v * x; }); };
   const nonEss = w.CP03 + w.CP09 + w.CP11;
-  if (L.vatFood) add('vatFood', -L.vatFood * w.CP01 * 0.3, -L.vatFood * w.CP01 * 0.6, -L.vatFood * w.CP01 * 0.9, L.vatFood * w.CP01 * c, 0,
-    'Food is ' + (w.CP01 * 100).toFixed(1) + '% of the basket.');
-  if (L.energy) {
-    const bind = Math.max(0, (num(s.nrg) ? s.nrg : 0) - 5) * L.energy / 100;
-    add('energy', -w.NRG * bind * 0.8, -w.NRG * bind, -w.NRG * bind, w.NRG * bind * c, 0,
-      bind > 0 ? 'Energy inflation is ' + s.nrg.toFixed(1) + '%; ' + bind.toFixed(1) + ' points absorbed.' : 'Not binding: energy inflation is at or below 5%.');
+  if (L.vatFood > 0) add('vatFood', times(K.vatCut, -L.vatFood * w.CP01), L.vatFood * w.CP01 * c, 0, 'Food is ' + (w.CP01 * 100).toFixed(1) + '% of the basket.');
+  if (L.energy > 0) {
+    const bind = Math.max(0, (num(s.nrg) ? s.nrg : 0) - K.energyFloor) * L.energy / 100;
+    add('energy', times(K.energyPass, -w.NRG * bind), w.NRG * bind * c, 0,
+      bind > 0 ? 'Energy inflation is ' + s.nrg.toFixed(1) + '%; ' + bind.toFixed(1) + ' points absorbed.' : 'Not binding: energy inflation is at or below ' + K.energyFloor + '%.');
   }
-  if (num(L.rent) && L.rent < 8) {
-    const bind = Math.max(0, (num(s.rent) ? s.rent : 0) - L.rent);
-    add('rent', -w.CP041 * bind, -w.CP041 * bind, -w.CP041 * bind, 0, 0,
-      bind > 0 ? 'Rents are rising ' + s.rent.toFixed(1) + '%; the cap removes ' + bind.toFixed(1) + ' points.' : 'Not binding: rents are rising more slowly than the cap.');
+  if (num(L.rent) && L.rent < NO_POLICY.rent) {
+    const bind = Math.max(0, (num(s.rent) ? s.rent : 0) - L.rent), e = -w.CP041 * bind;
+    add('rent', [e, e, e], 0, 0, bind > 0 ? 'Rents are rising ' + s.rent.toFixed(1) + '%; the cap removes ' + bind.toFixed(1) + ' points.' : 'Not binding: rents are rising more slowly than the cap.');
     if (bind > 2) flags.push('A rent cap this far below market growth risks shrinking rental supply.');
   }
-  if (L.reserve) {
-    const base = 0.3 * (w.FOOD + w.NRG);
-    add('reserve', -L.reserve * 0.3 * base, -L.reserve * 0.8 * base, -L.reserve * 1.5 * base, L.reserve * 0.02, 0, 'Temporary: stocks must be rebuilt later.');
-  }
-  if (L.supply) add('supply', L.supply * 0.5 * 0.05, L.supply * (0.5 * 0.15 - 0.10), L.supply * (0.5 * 0.30 - 0.25) , L.supply, 0.3 * L.supply, 'Main effect arrives in years two and three.');
-  if (L.transfer) {
-    add('transfer', L.transfer * 0.7 * 0.05, L.transfer * 0.7 * 0.15, L.transfer * 0.7 * 0.30, L.transfer, 0.5 * L.transfer,
-      'Equals ' + (L.transfer / (0.15 * c * 100) * 100).toFixed(1) + '% of low-income households’ annual spending.');
-  }
-  if (L.bonds) add('bonds', -L.bonds * 0.4 * 0.30, -L.bonds * 0.4 * 0.15, -L.bonds * 0.4 * 0.05, L.bonds * Math.max(0, pi - 2) / 100, -0.2 * L.bonds, 'Savers keep their purchasing power.');
-  if (L.wageIdx) {
-    const gap = Math.max(0, pi - 2) * L.wageIdx / 100;
-    add('wageIdx', gap * 0.05, gap * 0.15, gap * 0.30, 0, 0, 'Protects real pay but slows the return to target.');
+  if (L.reserve > 0) add('reserve', times(K.reserve, -L.reserve * K.reserveBase * (w.FOOD + w.NRG)), L.reserve * K.reserveCarry, 0, 'Temporary: stocks must be rebuilt later.');
+  if (L.supply > 0) add('supply', [0, 1, 2].map(function (i) { return L.supply * (K.supplyDemand * K.demand[i] - K.supply[i]); }), L.supply, K.gdpSupply * L.supply, 'Main effect arrives in years two and three.');
+  if (L.transfer > 0) add('transfer', times(K.demand, L.transfer * K.spendTransfer), L.transfer, K.gdpTransfer * L.transfer,
+    'Equals ' + (L.transfer / (K.lowShare * c * 100) * 100).toFixed(1) + '% of low-income households’ annual spending.');
+  if (L.bonds > 0) add('bonds', times(K.demand, -L.bonds * K.bondDivert), L.bonds * Math.max(0, pi - 2) / 100, -K.gdpBonds * L.bonds, 'Savers keep their purchasing power.');
+  if (L.wageIdx > 0) {
+    add('wageIdx', times(K.wage, Math.max(0, pi - 2) * L.wageIdx / 100), 0, 0, 'Protects real pay but slows the return to target.');
     if (L.wageIdx >= 50 && pi > 4) flags.push('Broad wage indexation with inflation above 4% raises the risk of a wage–price spiral.');
   }
-  if (L.vatLux) add('vatLux', L.vatLux * nonEss * 0.6, L.vatLux * nonEss * 0.8, L.vatLux * nonEss, -L.vatLux * nonEss * c * 0.9, -0.3 * L.vatLux * nonEss * c,
-    'Raises the measured index mechanically while cooling discretionary demand.');
+  if (L.vatLux > 0) {
+    const rev = L.vatLux * nonEss * c * 0.9;
+    add('vatLux', times(K.taxRise, L.vatLux * nonEss), -rev, -K.gdpTax * rev, 'Raises the measured index mechanically while cooling discretionary demand.');
+  }
   if (L.rate) {
     const r = L.rate / 100;
-    add('rate', -0.5 * r, -0.3 * r, -0.1 * r, 0, -0.4 * r, s.meta.euro || s.meta.agg ? 'Set by the ECB for the whole euro area — not a national lever.' : 'Set by the national central bank.');
+    add('rate', times(K.rate, -r), 0, -K.rateGdp[1] * r, s.meta.euro || s.meta.agg ? 'Set by the ECB for the whole euro area — not a national lever.' : 'Set by the national central bank.');
   }
   const sum = function (f) { return rows.reduce(function (a, r) { return a + r[f]; }, 0); };
   const cost = sum('cost'), bal = num(s.bal) ? s.bal - cost : null;
   if (bal !== null && bal < -3 && cost > 0.05) flags.push('The package takes the government balance to ' + bal.toFixed(1) + '% of GDP, beyond the 3% Treaty reference value.');
   if (num(s.debt) && s.debt > 60 && cost > 0.5) flags.push('Public debt is ' + s.debt.toFixed(0) + '% of GDP, above the 60% reference value; fund the package with offsetting revenue.');
-  if (L.energy >= 80 && L.transfer < 0.2) flags.push('Untargeted energy support is costly and weakens the incentive to save energy; consider shifting part to targeted relief.');
+  if (L.energy >= 80 && !(L.transfer >= 0.2)) flags.push('Untargeted energy support is costly and weakens the incentive to save energy; consider shifting part to targeted relief.');
   return {
     rows: rows, flags: flags, lo: sum('lo'), mid: sum('mid'), hi: sum('hi'), cost: cost, gdp: sum('gdp'), bal: bal,
     costEur: num(s.gdpEur) ? cost / 100 * s.gdpEur : null, pi: pi
@@ -290,19 +330,20 @@ export function simulate(s, L) {
 
 // --- Currency calculators ----------------------------------------------------
 export function exportBond(a) {
-  const bonus = Math.max(0, Math.floor(a.growth / a.per)) * a.bonus;
-  const y = Math.min(a.base + bonus, a.cap);
+  const steps = a.per > 0 ? Math.max(0, Math.floor(a.growth / a.per)) : 0;
+  const y = Math.max(a.base, Math.min(a.base + steps * a.bonus, a.cap));
   return { yield: y, bonus: y - a.base, annual: a.size * y / 100, extra: a.size * (y - a.base) / 100 };
 }
 export function fxLock(a) {
   const mkt = a.spot * (1 + a.move / 100);
   const locked = a.bill * a.lock, open = a.bill * mkt;
-  return { market: mkt, locked: locked, open: open, saving: open - locked, pct: locked ? (open - locked) / locked * 100 : 0 };
+  return { market: mkt, locked: locked, open: open, saving: open - locked, pct: open ? (open - locked) / open * 100 : 0 };
 }
 export function voucher(a) {
-  const kept = a.exports * a.share / 100, converted = a.exports - kept;
-  const covered = Math.min(kept, a.imports);
-  return { kept: kept, converted: converted, covered: covered, net: converted - (a.imports - covered), gross: a.exports + a.imports, grossAfter: converted + a.imports - covered };
+  const ex = Math.max(0, a.exports), im = Math.max(0, a.imports);
+  const kept = ex * clamp(a.share, 0, 100) / 100, converted = ex - kept;
+  const covered = Math.min(kept, im);
+  return { kept: kept, converted: converted, covered: covered, gross: ex + im, grossAfter: converted + im - covered };
 }
 // Volatility of a weighted basket of currencies against the euro versus its members.
 export function basket(D, ws) {

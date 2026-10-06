@@ -168,7 +168,12 @@ function fetchFx() {
       cur.forEach(function (c) { s[c] = tt.map(function () { return null; }); });
       const nT = j.size[ti];
       Object.keys(j.value).forEach(function (f) { const i = +f; s[cur[Math.floor(i / nT) % j.size[ci]]][i % nT] = j.value[f]; });
-      return { t: tt, s: s, upd: tt[tt.length - 1], via: 'Eurostat' };
+      // This table lists every calendar day; keep only days that carry a rate.
+      const keep = tt.map(function (_, i) { return cur.some(function (c) { return typeof s[c][i] === 'number'; }); });
+      const t = tt.filter(function (_, i) { return keep[i]; });
+      cur.forEach(function (c) { s[c] = s[c].filter(function (_, i) { return keep[i]; }); });
+      if (t.length < 50) throw new Error('short series');
+      return { t: t, s: s, upd: t[t.length - 1], via: 'Eurostat' };
     });
   });
 }

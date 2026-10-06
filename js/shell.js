@@ -1,5 +1,5 @@
 // Page frame: header, page tabs, content area, footer and the arrow dock.
-export const SHELL = `<a class="skip" href="#app">Skip to content</a>
+export const SHELL = `<a class="skip" href="./" data-act="skip">Skip to content</a>
 <header class="top">
   <div class="wrap bar">
     <a class="brand" href="./" data-go="overview" aria-label="EU Stability Compass, overview">
@@ -8,7 +8,7 @@ export const SHELL = `<a class="skip" href="#app">Skip to content</a>
     </a>
     <div class="tools">
       <span id="status" class="status s-info" role="status">Starting…</span>
-      <button id="install" class="btn gold" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Install app</button>
+      <button id="install" class="btn gold" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Install<span class="wide">&nbsp;app</span></button>
       <button id="theme" class="btn ghost" type="button" aria-label="Switch between light and dark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></button>
     </div>
   </div>
@@ -22,7 +22,7 @@ export const SHELL = `<a class="skip" href="#app">Skip to content</a>
   <div class="loading"><div class="spin"></div><p>Opening EU Stability Compass…</p></div>
 </main>
 <footer class="foot wrap">
-  <p>Independent tool, not affiliated with the European Union or the European Central Bank. Statistics: Eurostat and ECB open data. Estimates are illustrative; see <a href="./" data-go="method/how">Data &amp; Method</a>.</p>
+  <p>Independent tool, not affiliated with the European Union or the European Central Bank. Statistics: Eurostat and ECB open data. Estimates are illustrative; see <a href="#method/how" data-go="method/how">Data &amp; Method</a>.</p>
   <p>© 2026 Samuel Akosa Onyejekwe</p>
 </footer>
 <nav id="pager" class="pager" aria-label="Previous and next page"></nav>

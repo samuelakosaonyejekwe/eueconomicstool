@@ -14,12 +14,14 @@ function niceTicks(lo, hi, n) {
   const stepv = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag;
   const out = [];
   for (let v = Math.floor(lo / stepv) * stepv; v <= hi + stepv * 0.5; v += stepv) out.push(Math.abs(v) < 1e-9 ? 0 : v);
+  out.dp = Math.max(0, -Math.floor(Math.log(stepv) / Math.LN10 + 1e-9)); // decimals needed so neighbouring ticks never read the same
   return out;
 }
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export function periodLabel(p) {
   if (!p) return '';
+  p = esc(p); // period codes come from outside; never let them carry markup
   if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return +p.slice(8) + ' ' + MON[+p.slice(5, 7) - 1] + ' ' + p.slice(0, 4);
   if (/^\d{4}-\d{2}$/.test(p)) return MON[+p.slice(5) - 1] + ' ' + p.slice(0, 4);
   return p.replace('-', ' ');
@@ -37,7 +39,7 @@ function xTicks(t, maxN) {
 
 /* Line chart.
    o = { t: [periods], series: [{ name, values, color (1-8), dash }], unit, refs: [{ y, label }],
-         band: { from, lo: [], hi: [] }, height, zero } */
+         band: { from, lo: [], hi: [] }, height, dp, label } */
 export function lineChart(el, o) {
   if (!el) return;
   const W = Math.max(280, el.clientWidth || 600), Hh = o.height || 260;
@@ -48,20 +50,19 @@ export function lineChart(el, o) {
   if (o.band) o.band.lo.concat(o.band.hi).forEach(function (v) { if (num(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } });
   (o.refs || []).forEach(function (r) { if (r.y < lo) lo = r.y; if (r.y > hi) hi = r.y; });
   if (!isFinite(lo)) { el.innerHTML = '<p class="empty">No data available for this selection.</p>'; return; }
-  if (o.zero && lo > 0) lo = 0;
   const pad = (hi - lo) * 0.06 || 0.5;
   const ticks = niceTicks(lo - pad, hi + pad, 4);
   lo = ticks[0]; hi = ticks[ticks.length - 1];
   const X = function (i) { return m.l + (n > 1 ? i / (n - 1) : 0.5) * iw; };
   const Y = function (v) { return m.t + (1 - (v - lo) / (hi - lo)) * ih; };
-  const dp = hi - lo < 3 ? 1 : 0;
+  const dp = ticks.dp;
   let g = '';
   ticks.forEach(function (v) {
     g += '<line class="grid' + (v === 0 ? ' zero' : '') + '" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/>' +
       '<text class="tick" x="' + (m.l - 6) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">' + fmt(v, dp) + '</text>';
   });
   xTicks(o.t, W < 420 ? 4 : 8).forEach(function (k) {
-    g += '<text class="tick" x="' + X(k.i).toFixed(1) + '" y="' + (Hh - 7) + '" text-anchor="middle">' + esc(k.l) + '</text>';
+    g += '<text class="tick" x="' + X(k.i).toFixed(1) + '" y="' + (Hh - 7) + '" text-anchor="middle">' + k.l + '</text>';
   });
   (o.refs || []).forEach(function (r) {
     g += '<line class="ref" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(r.y).toFixed(1) + '" y2="' + Y(r.y).toFixed(1) + '"/>' +
@@ -105,7 +106,7 @@ export function lineChart(el, o) {
     if (!rows) { leave(); return; }
     cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.style.display = '';
     dots.innerHTML = dd;
-    tip.innerHTML = '<strong>' + esc(periodLabel(o.t[i])) + (o.band && i > o.band.from ? ' · projection' : '') + '</strong>' + rows;
+    tip.innerHTML = '<strong>' + periodLabel(o.t[i]) + (o.band && i > o.band.from ? ' · projection' : '') + '</strong>' + rows;
     tip.hidden = false;
     const left = X(i) > W / 2 ? X(i) - tip.offsetWidth - 10 : X(i) + 10;
     tip.style.left = Math.max(0, left) + 'px';
@@ -139,7 +140,7 @@ export function barList(rows, o) {
   if (num(o.ref)) { lo = Math.min(lo, o.ref); hi = Math.max(hi, o.ref); }
   const span = hi - lo || 1, zero = (0 - lo) / span * 100;
   const refx = num(o.ref) ? (o.ref - lo) / span * 100 : null;
-  return '<div class="bars">' + rows.map(function (r) {
+  return '<div class="bars' + ((o.unit || '').length > 1 ? ' wide' : '') + '">' + rows.map(function (r) {
     if (!num(r.value)) return '<div class="bar-row mute"' + (r.code ? ' data-country="' + r.code + '"' : '') + '><span class="bl">' + esc(r.label) + '</span><span class="bt"></span><span class="bv">–</span></div>';
     const w = Math.abs(r.value) / span * 100, left = r.value >= 0 ? zero : zero - w;
     return '<div class="bar-row' + (r.hl ? ' hl' : '') + (r.agg ? ' agg' : '') + '"' + (r.code ? ' data-country="' + r.code + '" tabindex="0" role="link"' : '') + ' title="' + esc(r.label) + ': ' + fmt(r.value, o.dp) + (o.unit || '') + '">' +
@@ -150,8 +151,8 @@ export function barList(rows, o) {
 
 // 0–100 meter with a status label.
 export function meter(score, label) {
-  if (!num(score)) return '<div class="meter na"><span class="mt"><i style="width:0"></i></span><b>n/a</b></div>';
-  const tone = score >= 66 ? 'crit' : score >= 33 ? 'warn' : 'good';
-  return '<div class="meter ' + tone + '"><span class="mt"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '</b><em>' + esc(label) + '</em></div>';
+  if (!num(score)) return '<div class="meter na"><span class="track"><i style="width:0"></i></span><b>n/a</b></div>';
+  const tone = label === 'High' ? 'crit' : label === 'Moderate' ? 'warn' : 'good';
+  return '<div class="meter ' + tone + '"><span class="track"><i style="width:' + Math.max(2, score) + '%"></i></span><b>' + Math.round(score) + '</b><em>' + esc(label) + '</em></div>';
 }
 export { esc };

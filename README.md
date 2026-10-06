@@ -21,7 +21,7 @@ Each visitor's browser fetches the figures directly from the publishers' open AP
 
 - Eurostat dissemination API (prices, labour market, national accounts, public finances, balance of payments, energy)
 - European Central Bank Data Portal (key interest rate, reference exchange rates)
-- frankfurter.dev (ECB reference exchange rates; first of three routes)
+- frankfurter.dev (ECB reference exchange rates; first of three routes, then the ECB Data Portal, then Eurostat)
 
 There is no private server. `data/snapshot.json` is a bundled baseline shown on a first visit until the live fetch completes; refresh it with `node tools/snapshot.mjs`.
 
@@ -33,11 +33,11 @@ The tool is a progressive web app. Use the **Install app** button, or the browse
 
 Commit to `main` — with `git push` from any computer, or by editing a file on github.com. Nothing else is needed: the page looks up the newest commit and runs that exact version through the jsDelivr CDN, so changes reach people the next time they open the tool (it re-checks every ten minutes or so), with no build step.
 
-GitHub Pages serves only a small loader, from the `live` branch, so ordinary commits to `main` cause no GitHub build. The one exception: after changing a loader file (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`), run `tools/rebuild-shell.sh` once to copy `main` to `live`.
+GitHub Pages serves only a small loader, from the `live` branch, so ordinary commits to `main` cause no GitHub build. The one exception: after changing a loader file (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`), run `tools/rebuild-shell.sh` once to copy `main` to `live`. If you edited a script inside `index.html`, run `node tools/csp.mjs` first so the page's security policy lists the new script.
 
 ## Hosting it elsewhere
 
-The site is plain static files with relative paths and no build step. Copy the folder to any static host and it runs as is. `tools/mirror.sh <git-remote-url>` pushes the current version to an additional git host; add the new address to `mirrors.json`.
+The site is plain static files with no build step. `tools/mirror.sh <git-remote-url>` copies the `main` and `live` branches to an additional git host; publish the `live` branch there as a static site and add the new address to `mirrors.json`.
 
 ## Independence
 
