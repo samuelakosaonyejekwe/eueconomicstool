@@ -29,6 +29,10 @@ There is no private server. `data/snapshot.json` is a bundled baseline shown on 
 
 The tool is a progressive web app. Use the **Install app** button, or the browser's "Install" / "Add to Home Screen" option. After the first visit it opens and works without a connection, showing the last figures it fetched.
 
+## Updating the live site
+
+Commit and run `git push`. A push hook publishes the site and then clears the build records. After a fresh clone, enable the hook once with `git config core.hooksPath tools/hooks` (needs the GitHub CLI, `gh`, signed in).
+
 ## Hosting it elsewhere
 
 The site is plain static files with relative paths and no build step. Copy the folder to any static host and it runs as is. `tools/mirror.sh <git-remote-url>` pushes the current version to an additional git host; add the new address to `mirrors.json`.

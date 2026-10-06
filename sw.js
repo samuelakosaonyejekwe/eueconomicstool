@@ -2,7 +2,7 @@
 // served from there first, then refreshed in the background, so the tool opens
 // instantly and keeps working with no connection. Live statistics are fetched by
 // the page itself and are not intercepted here.
-const CACHE = 'esc-shell-v1.0.1';
+const CACHE = 'esc-shell-v1.0.2';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/data.js', 'js/model.js', 'js/charts.js', 'js/countries.js',
   'js/strategies.js', 'js/method.js', 'data/snapshot.json', 'manifest.webmanifest', 'mirrors.json', 'version.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'];
