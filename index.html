@@ -28,8 +28,8 @@ body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans
 <script type="module">
 // Loader. Finds the newest published commit of the tool and starts exactly that
 // version from a content delivery network, so every change to the repository
-// goes live by itself. If that is unavailable it falls back, first to the CDN's
-// own latest copy, then to the copy stored with this page.
+// goes live by itself. If that version is slow to arrive or unavailable, the
+// copy stored with this page is used instead, so nobody waits.
 const REPO = 'samuelakosaonyejekwe/eueconomicstool';
 const CDN = 'https://cdn.jsdelivr.net/gh/' + REPO + '@';
 const KEY = 'esc.rev';
@@ -46,17 +46,18 @@ async function lookup() {
   } catch (e) { /* offline or over the hourly allowance */ }
 }
 (async function () {
-  if (!rev && !dev) await Promise.race([lookup(), wait(3000)]);
+  const t0 = Date.now();
+  if (!rev && !dev) await Promise.race([lookup(), wait(1500)]);
   window.__esc = { repo: REPO, cdn: CDN, key: KEY, dev: dev, rev: rev };
-  const bases = dev ? ['./'] : (rev ? [CDN + rev.sha + '/'] : []).concat([CDN + 'main/', './']);
-  for (let i = 0; i < bases.length; i++) {
-    try {
-      const boot = await Promise.race([import(bases[i] + 'js/boot.js'), wait(i === bases.length - 1 ? 60000 : 8000)]);
-      if (!boot) continue;
-      await boot.run(bases[i]);
-      return;
-    } catch (e) { if (window.__escStarted) return; }
-  }
+  const stored = new URL('./', document.baseURI).href;
+  const go = async function (base) { const boot = await import(base + 'js/boot.js'); await boot.run(base); };
+  if (dev || !rev) { go(stored); return; }
+  // Start the newest version; if it is not on screen within two seconds, start
+  // the stored copy as well. Whichever is ready first is used, the other stops.
+  let fell = false;
+  const fall = function () { if (!fell && !window.__escClaim) { fell = true; go(stored).catch(function () { /* nothing else to try */ }); } };
+  const timer = setTimeout(fall, Math.max(0, 2000 - (Date.now() - t0)));
+  go(CDN + rev.sha + '/').then(function () { clearTimeout(timer); }, function () { clearTimeout(timer); fall(); });
 })();
 </script>
 <script nomodule>document.getElementById('root').innerHTML='<p style="padding:24px;font:16px system-ui">This browser is too old to run the tool. Please update it, or open the page in a current version of Chrome, Edge, Firefox or Safari.</p>';</script>

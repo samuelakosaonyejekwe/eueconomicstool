@@ -14,21 +14,26 @@ function style(base) {
   return new Promise(function (done) {
     const l = document.createElement('link');
     l.rel = 'stylesheet'; l.href = base + 'css/app.css';
-    l.onload = function () { done(true); };
-    l.onerror = function () { l.remove(); done(false); };
-    setTimeout(function () { if (!l.sheet) { l.remove(); done(false); } }, 7000);
+    l.onload = function () { done(l); };
+    l.onerror = function () { l.remove(); done(null); };
+    setTimeout(function () { if (!l.sheet) { l.remove(); done(null); } }, 7000);
     document.head.appendChild(l);
   });
 }
 
 export async function run(base) {
-  if (window.__escStarted) return;
+  // The loader may start two copies at once (newest and stored). The first one
+  // ready to draw claims the page; the other backs out without a trace.
+  if (window.__escClaim) return;
   base = new URL(base, document.baseURI).href;
   const x = window.__esc;
   warm(base);
-  if (!(await style(base))) throw new Error('stylesheet unavailable');
-  const frame = await import(base + 'js/shell.js');
-  if (window.__escStarted) return;
+  const sheet = await style(base);
+  if (!sheet) throw new Error('stylesheet unavailable');
+  let frame;
+  try { frame = await import(base + 'js/shell.js'); } catch (e) { sheet.remove(); throw e; }
+  if (window.__escClaim) { sheet.remove(); return; }
+  window.__escClaim = base;
   document.getElementById('root').innerHTML = frame.SHELL;
   await import(base + 'js/app.js');
   if (x.dev) return;
@@ -68,9 +73,10 @@ async function check(x, running) {
     warm(next);
     fetch(next + 'css/app.css').catch(function () { /* offline */ });
     fetch(next + 'js/boot.js').catch(function () { /* offline */ });
+    if (!running) return; // running the stored copy: the newest version is now ready for the next start
     let auto = '';
     try { auto = sessionStorage.getItem('esc.auto') || ''; } catch (e) { /* storage blocked */ }
-    if (running && !touched && Date.now() - started < 8000 && auto !== sha) {
+    if (!touched && Date.now() - started < 8000 && auto !== sha) {
       // Nobody has started working yet: switch to the new version silently.
       try { sessionStorage.setItem('esc.auto', sha); } catch (e) { /* storage blocked */ }
       setTimeout(function () { location.reload(); }, 900);
