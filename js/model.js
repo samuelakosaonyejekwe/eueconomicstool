@@ -441,25 +441,25 @@ ASSUMPTIONS.forEach(function (row, i) { row.push(EVIDENCE[i] || []); });
 export const EVIDENCE_REVIEWED = '6 October 2026';
 
 export const LEVERS = [
-  { k: 'vatFood', n: 'Cut VAT on food essentials', unit: ' pp', max: 10, step: 0.5, grp: 'Prices',
+  { k: 'vatFood', who: ['gov'], n: 'Cut VAT on food essentials', unit: ' pp', max: 10, step: 0.5, grp: 'Prices',
     d: 'Lower the VAT rate on basic foodstuffs.', law: 'Allowed: the VAT Directive (as amended by Directive (EU) 2022/542) permits reduced and zero rates on foodstuffs.', ref: ["Council Directive 2006/112/EC (consolidated), Article 98(1)–(2) and Annex III, point (1)", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02006L0112-20250101"] },
-  { k: 'energy', n: 'Absorb energy price growth above ' + K.energyFloor + '%', unit: '%', max: 100, step: 5, grp: 'Prices',
+  { k: 'energy', who: ['gov'], n: 'Absorb energy price growth above ' + K.energyFloor + '%', unit: '%', max: 100, step: 5, grp: 'Prices',
     d: 'The state covers this share of energy price growth above ' + K.energyFloor + '% a year, through a bill cap or rebate.', law: 'Directive (EU) 2019/944, Article 5, allows below-cost regulated electricity prices only for energy-poor or vulnerable households; Article 66a extends this to other households (up to 80% of median consumption) if the Council declares a price crisis. Aid to firms must respect State-aid rules.', ref: ["Directive (EU) 2019/944 as amended by Directive (EU) 2024/1711, Articles 5 and 66a", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02019L0944-20240716"] },
-  { k: 'rent', n: 'Limit annual rent increases', unit: '% cap', max: 8, step: 0.5, off: 8, grp: 'Prices',
+  { k: 'rent', who: ['gov', 'local'], n: 'Limit annual rent increases', unit: '% cap', max: 8, step: 0.5, off: 8, grp: 'Prices',
     d: 'Rents may rise by at most this much a year. 8% means no cap.', law: 'National competence. Tight caps can reduce rental supply over time.', ref: ["Commission proposal COM(2026) 599 final (Affordable Housing Act), explanatory memorandum", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:52026PC0599"] },
-  { k: 'reserve', n: 'Release strategic stocks', unit: '% of use', max: 10, step: 0.5, grp: 'Supply',
+  { k: 'reserve', who: ['gov', 'eu'], n: 'Release strategic stocks', unit: '% of use', max: 10, step: 0.5, grp: 'Supply',
     d: 'Release food and energy reserves equal to this share of annual consumption.', law: 'Directive 2009/119/EC requires oil stocks of at least 90 days of net imports or 61 days of consumption, whichever is greater, and ties releases to supply disruptions (Article 20). Article 35 TFEU prohibits export restrictions between member states, subject to the Article 36 exceptions.', ref: ["Council Directive 2009/119/EC, Articles 3 and 20; Articles 35 and 36 TFEU", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0119"] },
-  { k: 'supply', n: 'Supply-side incentives', unit: '% GDP', max: 1.5, step: 0.1, grp: 'Supply',
+  { k: 'supply', who: ['gov', 'eu'], n: 'Supply-side incentives', unit: '% GDP', max: 1.5, step: 0.1, grp: 'Supply',
     d: 'Incentives for producers that expand output or cut resource use in food, energy and housing.', law: 'Aid must be notified to the Commission before it is granted (Article 108(3) TFEU) unless it is block-exempted, chiefly under Regulation (EU) No 651/2014, which applies until 31 December 2026, or is de minimis aid under Regulation (EU) 2023/2831.', ref: ["Commission Regulation (EU) No 651/2014 (consolidated), Article 59; Article 108(3) TFEU", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0651-20230701"] },
-  { k: 'transfer', n: 'Targeted relief to low-income households', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
+  { k: 'transfer', who: ['gov', 'local'], n: 'Targeted relief to low-income households', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
     d: 'Payments restricted to the bottom 30% of households.', law: 'Counts as net expenditure under Article 2(2) of Regulation (EU) 2024/1263, which nets out only interest, discretionary revenue measures, EU-funded programme spending and national co-financing, cyclical unemployment benefit spending, and one-offs and other temporary measures.', ref: ["Regulation (EU) 2024/1263, Article 2(2)", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1263"] },
-  { k: 'bonds', n: 'Inflation-linked retail savings bonds', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
+  { k: 'bonds', who: ['gov'], n: 'Inflation-linked retail savings bonds', unit: '% GDP', max: 2, step: 0.1, grp: 'Households',
     d: 'Household take-up of government bonds whose return tracks inflation.', law: 'National debt-management decision. Indexation cost rises with inflation.', ref: ["Italian Treasury (MEF), BTP Italia Sì announcement, May 2026", "https://www.dt.mef.gov.it/en/news/2026/btp_italia_20052026.html"] },
-  { k: 'wageIdx', n: 'Automatic wage indexation coverage', unit: '% of pay', max: 100, step: 5, grp: 'Households',
+  { k: 'wageIdx', who: ['gov', 'biz'], n: 'Automatic wage indexation coverage', unit: '% of pay', max: 100, step: 5, grp: 'Households',
     d: 'Share of the wage bill that rises automatically with inflation.', law: 'Social partners’ and national competence. Belgium, Luxembourg, Malta and Cyprus run such systems.', ref: ["ECB Economic Bulletin 7/2021, box on private sector wage indexation in the euro area", "https://www.ecb.europa.eu/press/economic-bulletin/focus/2021/html/ecb.ebbox202107_07~f555b70c47.en.html"] },
-  { k: 'vatLux', n: 'Raise consumption tax on non-essentials', unit: ' pp', max: 5, step: 0.5, grp: 'Revenue',
+  { k: 'vatLux', who: ['gov'], n: 'Raise consumption tax on non-essentials', unit: ' pp', max: 5, step: 0.5, grp: 'Revenue',
     d: 'Higher tax on clothing, leisure and restaurants; helps fund relief.', law: 'The VAT Directive allows only one standard rate, so a separate luxury rate is not available: move items out of reduced rates or use excise duties.', ref: ["Council Directive 2006/112/EC (consolidated), Articles 96–98", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02006L0112-20250101"] },
-  { k: 'rate', n: 'Change the policy interest rate', unit: ' bp', min: -200, max: 200, step: 25, grp: 'Monetary',
+  { k: 'rate', who: ['cb'], n: 'Change the policy interest rate', unit: ' bp', min: -200, max: 200, step: 25, grp: 'Monetary',
     d: 'Tighten or loosen monetary policy.', law: 'Decided independently by the central bank (Article 130 TFEU). In the euro area this is the ECB, for all members at once.', ref: ["Article 130 TFEU; ECB press release of 1 January 2026 on Bulgaria", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:12016E130"] }
 ];
 // Legal basis of the fiscal reference values used in the warnings below.

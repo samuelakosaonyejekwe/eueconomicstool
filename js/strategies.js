@@ -14,6 +14,80 @@ export const ROLES = [
   { k: 'biz', n: 'Business' }, { k: 'hh', n: 'Households & civil society' }, { k: 'res', n: 'Economists & researchers' }
 ];
 
+// What each viewpoint should look for on each page. Shown under the page title when a viewpoint is chosen.
+export const GUIDE = {
+  gov: {
+    overview: 'See where your country stands against the other members, then open it to find where the pressure comes from.',
+    country: 'The gauges show which pressures tax, spending and regulation can act on. The strategies below are those a national government would lead.',
+    inflation: 'Pressure in volatile items calls for targeted, temporary relief; pressure in slow-moving prices calls for broader restraint. The diagnosis tells you which you face.',
+    currency: 'For euro members the exchange rate is not a national lever, so watch the external position. Members with their own currency can test the stabilisation tools.',
+    simulator: 'The measures you decide are marked. Watch the budget cost and the balance against the 3% reference value.',
+    strategies: 'The list is narrowed to strategies a national government would lead.',
+    compare: 'Rank your country against its peers on inflation, public finances and the external balance.',
+    method: 'Before using an estimate in a briefing, check what it rests on in the assumptions table.'
+  },
+  cb: {
+    overview: 'Headline and core inflation across the Union, with the policy rate, at a glance.',
+    country: 'Core and services inflation, wages and expectations show how persistent inflation is likely to be.',
+    inflation: 'The hybrid index separates shock-sensitive from slow-moving prices; the early-warning view shows momentum and pressure in the pipeline.',
+    currency: 'Volatility, the ERM II band and the external position, with tools that put numbers on stabilisation options.',
+    simulator: 'The policy rate is the measure you decide. Fiscal measures are shown so their effect on inflation can be read alongside it.',
+    strategies: 'The list is narrowed to strategies in which a central bank has a role.',
+    compare: 'Compare persistence across members: core and services inflation, wages and expectations.',
+    method: 'The pass-through and policy-rate assumptions, with the ECB studies behind them, are in the assumptions table.'
+  },
+  eu: {
+    overview: 'The spread of inflation across members shows how far one policy fits all.',
+    country: 'Each country’s pressures and fiscal room show where Union-level instruments would help most.',
+    inflation: 'Imported and cost pressures shared by many members point to Union-level action on energy, trade and reserves.',
+    currency: 'The six currencies outside the euro and the external positions of all members.',
+    simulator: 'Measures marked for the Union level need agreement between members; national measures show what each state can do alone.',
+    strategies: 'The list is narrowed to strategies that need, or benefit from, Union-level action.',
+    compare: 'Rank the 27 on any indicator to see divergence and outliers.',
+    method: 'Legal notes link to the acts they rest on and show whether each is still in force.'
+  },
+  local: {
+    overview: 'National figures set the scene; price pressure in your area may be higher or lower.',
+    country: 'Housing, energy and food are where regional and local authorities can act most directly.',
+    inflation: 'The spending categories show which household costs are rising fastest, which guides local relief.',
+    currency: 'Mostly a national and Union matter; the external position shows how exposed your country is to imported price rises.',
+    simulator: 'Rent rules and targeted relief are the measures where regional and local authorities usually have a say; they are marked.',
+    strategies: 'The list is narrowed to strategies a regional or local authority can run or host.',
+    compare: 'Compare your country with its neighbours on housing costs, unemployment and prices.',
+    method: 'Sources and limits are listed so figures can be quoted with their date.'
+  },
+  biz: {
+    overview: 'Where prices are rising fastest across your markets, and where interest rates stand.',
+    country: 'Wage growth, producer prices and energy show where your costs are heading.',
+    inflation: 'The early-warning view and producer prices help in timing price changes; the components show where input costs are rising.',
+    currency: 'The rate-lock calculator shows what fixing an exchange rate is worth on an import bill.',
+    simulator: 'These are decisions for governments and central banks; use the simulator to see how measures under discussion would affect prices and demand.',
+    strategies: 'The list is narrowed to strategies that businesses can take part in or lead.',
+    compare: 'Compare cost and demand conditions across the countries you sell in.',
+    method: 'Each figure can be traced to its source and date before it goes into a plan.'
+  },
+  hh: {
+    overview: 'How fast prices are rising where you live, compared with the rest of the Union.',
+    country: 'The spending categories show which everyday costs are rising fastest.',
+    inflation: 'Open “Personal inflation” to see how price rises hit your own budget and which categories matter most for you.',
+    currency: 'If you are paid, save or borrow in another currency, the monitor shows how it has moved against the euro.',
+    simulator: 'These are decisions for governments and central banks; the simulator shows what measures being debated would mean for prices.',
+    strategies: 'The list is narrowed to strategies households and community groups can use or take part in.',
+    compare: 'See how your country compares on prices, wages and unemployment.',
+    method: 'Where every number comes from, and how to install the tool on your phone.'
+  },
+  res: {
+    overview: 'Live HICP, labour-market, national-accounts and exchange-rate series for all 27 members.',
+    country: 'Every figure links to its Eurostat or ECB series; charts can be opened as tables.',
+    inflation: 'Gauge definitions, basket weights and the projection rule are set out under Data & Method.',
+    currency: 'Daily ECB reference rates over two years, with volatility and a basket calculator.',
+    simulator: 'Every coefficient is listed with its range and the studies behind it; results are first-year and partial.',
+    strategies: 'All strategies are shown, each with its legal basis and source.',
+    compare: 'Rank and chart any indicator; the underlying data can be downloaded under Data & Method.',
+    method: 'Sources, formulas, assumptions with references, and known limits.'
+  }
+};
+
 export const STRATEGIES = [
   // Data & early warning
   S('ews', 'Inflation forecasting ecosystem', 'IFDE', 'Data & early warning', ['gov', 'cb', 'eu', 'res'], { dem: 2, cost: 2, imp: 2, exp: 2 }, 2, 1, 2, 'all',

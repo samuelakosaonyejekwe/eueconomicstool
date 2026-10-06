@@ -86,6 +86,9 @@ main { padding-top: 20px; min-height: 60vh; }
 main:focus { outline: none; }
 .ph h1 { font-size: 26px; line-height: 1.2; letter-spacing: -.2px; }
 .ph p { color: var(--ink2); margin-top: 4px; max-width: 72ch; }
+.lens { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0 0 16px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--gold); box-shadow: var(--shadow); }
+.lens p { flex: 1 1 320px; font-size: 14px; margin: 2px 12px 2px 0; } .lens .btn { height: 34px; font-size: 13px; margin: 2px 0; }
+.sliders .badge { font-size: 11px; padding: 1px 8px; font-weight: 600; vertical-align: 1px; }
 .pha { margin: 10px -3px 0; }
 .pha .badge { margin: 3px; }
 .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 99px; background: var(--surface2); color: var(--ink2); border: 1px solid var(--line); white-space: nowrap; }
@@ -305,7 +308,7 @@ input[type=range] { width: 100%; height: 28px; accent-color: var(--brand2); marg
   @page { size: A4; margin: 12mm; }
   html, body { background: #fff !important; }
   body { padding: 0; font-size: 12px; }
-  .top .tools, .top .ctx, .tabs, .pager, .toast, .modal, .hop, .skip, .actions, .chipset, .filters, .astable, .tip { display: none !important; }
+  .top .tools, .top .ctx, .tabs, .pager, .toast, .modal, .hop, .skip, .actions, .chipset, .filters, .astable, .tip, .lens .btn { display: none !important; }
   .top { background: none; color: #000; border-bottom: 2px solid #0b2a6f; padding: 0 0 6px; margin-bottom: 10px; } .brand { color: #000; } .bar { min-height: 0; } .brand small { opacity: 1; }
   .wrap { max-width: none; padding-left: 0; padding-right: 0; } main { padding-top: 0; min-height: 0; }
   .grid.two, .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

@@ -1,14 +1,14 @@
 import { COUNTRIES, BY_CODE, CODES, NON_EURO, nameOf } from './countries.js';
 import { DATASETS, CORE_IDS, ALL_IDS, COICOP, DIVISIONS, fetchDataset, isStale, sourceUrl } from './data.js';
 import * as M from './model.js';
-import { STRATEGIES, CATEGORIES, ROLES, REVIEWED, REVIEWED_ISO, celexOf, actsIn, recommend, applies } from './strategies.js';
+import { STRATEGIES, CATEGORIES, ROLES, GUIDE, REVIEWED, REVIEWED_ISO, celexOf, actsIn, recommend, applies } from './strategies.js';
 import { STATUS, STATUS_CHECKED } from './legal-status.js';
 import { lineChart, spark, barList, meter, fmt, esc, periodLabel } from './charts.js';
 import { PAGE_METHOD } from './method.js';
 
 const BASE = new URL('../', import.meta.url).href;
 const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || (BASE.indexOf('@main/') > 0 ? 'latest' : 'stored copy');
-const VERSION = '1.7.0'; // the only place the release number is written
+const VERSION = '1.8.0'; // the only place the release number is written
 window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
@@ -66,13 +66,61 @@ function tile(label, value, sub, o) {
 // Legal notes look after themselves: each cited EU act carries the last day it applies, taken
 // from the EU Publications Office database, and the note is flagged once that day has passed.
 function isoToday() { return new Date().toISOString().slice(0, 10); }
+// Every EU regulation or directive the tool cites, by document number.
+const ACT_IDS = (function () {
+  const ids = [], add = function (c) { if (/^3\d{4}[RLD]\d{4}$/.test(c) && ids.indexOf(c) < 0) ids.push(c); };
+  STRATEGIES.forEach(function (x) { if (x.src) add(celexOf(x.src[1])); actsIn(x.eu).forEach(add); });
+  M.LEVERS.forEach(function (l) { if (l.ref) add(celexOf(l.ref[1])); actsIn(l.law).forEach(add); });
+  return ids;
+})();
+// Each visitor's browser asks the EU Publications Office database directly whether those acts are
+// still in force, once a day. That database does not accept ordinary cross-site requests but does
+// answer in script-callback form, so the reply arrives through a script element. Until a live reply
+// arrives, and whenever the database cannot be reached, the dates stored with the tool are used.
+let LIVE = LS.get('acts');
+if (!LIVE || !LIVE.s || typeof LIVE.at !== 'number') LIVE = null;
+function actOf(c) { return LIVE && LIVE.s[c] ? LIVE.s[c] : STATUS[c]; }
+function refreshActs() {
+  if (!online || window.__escActsBusy || (LIVE && Date.now() - LIVE.at < 24 * 3600000) || !/^https?:$/.test(location.protocol)) return;
+  window.__escActsBusy = true;
+  const tag = document.createElement('script');
+  const done = function () { window.__escActsBusy = false; clearTimeout(timer); tag.remove(); };
+  const timer = setTimeout(done, 40000);
+  window.__escActs = function (j) {
+    try {
+      const out = {};
+      j.results.bindings.forEach(function (b) {
+        const c = b.celex ? String(b.celex.value) : '';
+        if (ACT_IDS.indexOf(c) < 0) return;
+        const end = b.end && /^\d{4}-\d{2}-\d{2}/.test(b.end.value) ? b.end.value.slice(0, 10) : '';
+        const inforce = b.inforce ? /^(1|true)$/.test(b.inforce.value) : null;
+        if (end || inforce !== null) out[c] = [end || '9999-12-31', inforce !== false];
+      });
+      if (Object.keys(out).length >= ACT_IDS.length / 2) {
+        LIVE = { at: Date.now(), s: out }; LS.set('acts', LIVE);
+        const act = document.activeElement;
+        if (['strategies', 'simulator', 'method'].indexOf(st.page) >= 0 && !(act && /INPUT|SELECT/.test(act.tagName) && $('app').contains(act))) render(true);
+      }
+    } catch (e) { /* unexpected reply: keep the stored dates */ }
+    done();
+  };
+  const query = 'PREFIX cdm: <http://publications.europa.eu/ontology/cdm#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> SELECT ?celex ?inforce ?end WHERE { VALUES ?celex { ' +
+    ACT_IDS.map(function (c) { return '"' + c + '"^^xsd:string'; }).join(' ') + ' } ?w cdm:resource_legal_id_celex ?celex . OPTIONAL { ?w cdm:resource_legal_in-force ?inforce } OPTIONAL { ?w cdm:resource_legal_date_end-of-validity ?end } }';
+  tag.src = 'https://publications.europa.eu/webapi/rdf/sparql?query=' + encodeURIComponent(query) + '&format=' + encodeURIComponent('application/sparql-results+json') + '&callback=__escActs';
+  tag.onerror = done;
+  document.head.appendChild(tag);
+}
+function actsNote() {
+  return LIVE ? 'In-force status of the ' + ACT_IDS.length + ' EU acts cited was read live from the EU Publications Office database ' + ago(LIVE.at) + '.'
+    : 'In-force status of the ' + ACT_IDS.length + ' EU acts cited is as stored on ' + periodLabel(STATUS_CHECKED) + '; a live reading is made whenever the EU Publications Office database can be reached.';
+}
 function actStatus(url, today, text) {
   today = today || isoToday();
   // the act behind the source link, plus every regulation or directive the note itself names
-  const ids = [celexOf(url)].concat(actsIn(text)).filter(function (c, i, a) { return c && STATUS[c] && a.indexOf(c) === i; });
+  const ids = [celexOf(url)].concat(actsIn(text)).filter(function (c, i, a) { return c && actOf(c) && a.indexOf(c) === i; });
   let ended = null, until = null;
   ids.forEach(function (c) {
-    const st = STATUS[c];
+    const st = actOf(c);
     if (!st[1] || st[0] < today) { if (!ended || st[0] < ended[0]) ended = [st[0], c]; }
     else if (st[0] !== '9999-12-31' && (!until || st[0] < until[0])) until = [st[0], c];
   });
@@ -84,7 +132,7 @@ function reviewAge(today) {
   const days = (Date.parse(today || isoToday()) - Date.parse(REVIEWED_ISO)) / 86400000;
   return days > 365 ? '<p class="note warnline">These legal notes were last checked on ' + REVIEWED + ', more than a year ago. Follow the linked sources for the current law.</p>' : '';
 }
-window.__legal = { actStatus: actStatus, reviewAge: reviewAge }; // exposed for the automated tests
+window.__legal = { actStatus: actStatus, reviewAge: reviewAge, live: function () { return LIVE; }, ids: ACT_IDS }; // exposed for the automated tests
 function badge(text, tone) { return '<span class="badge b-' + (tone || 'mute') + '">' + esc(text) + '</span>'; }
 function subtabs(page) {
   return '<div class="subtabs" role="group" aria-label="Sections of this page">' + SUBS[page].map(function (s) {
@@ -102,7 +150,13 @@ function head(title, lead, extra) {
   return '<div class="ph"><div class="pht"><h1 id="title" tabindex="-1">' + title + '</h1><p>' + lead + '</p>' + (extra || '') + '</div><div class="hop">' +
     '<a class="hopb" href="' + link(nb.prev.k) + '" data-go="' + nb.prev.k + '" aria-label="Back to ' + nb.prev.n + '">' + ARROW_L + '</a>' +
     '<span><span class="sr">Page ' + (nb.i + 1) + ' of ' + PAGES.length + '</span><span aria-hidden="true">' + (nb.i + 1) + ' / ' + PAGES.length + '</span></span>' +
-    '<a class="hopb" href="' + link(nb.next.k) + '" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '">' + ARROW_R + '</a></div></div>';
+    '<a class="hopb" href="' + link(nb.next.k) + '" data-go="' + nb.next.k + '" aria-label="Forward to ' + nb.next.n + '">' + ARROW_R + '</a></div></div>' + lens();
+}
+function roleName(k) { return ROLES.filter(function (x) { return x.k === k; })[0].n; }
+// The chosen viewpoint is always visible: what this page offers that reader, and a way back.
+function lens() {
+  if (st.role === 'all' || !GUIDE[st.role]) return '';
+  return '<div class="lens" role="note"><p><b>Viewpoint: ' + roleName(st.role) + '.</b> ' + GUIDE[st.role][st.page] + '</p><button class="btn" data-act="lensoff">Show for all stakeholders</button></div>';
 }
 function heatStep(pi) {
   if (typeof pi !== 'number') return 'hx';
@@ -188,7 +242,7 @@ function stratCard(r, compact) {
     (compact ? '' : '<p class="eu"><b>EU fit.</b> ' + esc(s.eu) + source + actStatus(s.src ? s.src[1] : '', '', s.eu) + '</p>') +
     '<div class="chips">' + badge(fe[0], fe[1]) + badge('Takes effect in: ' + sp.toLowerCase(), 'mute') + badge(co, 'mute') +
     (s.scope === 'noneuro' ? badge('Own-currency members', 'info') : s.scope === 'eu' ? badge('Union level', 'info') : '') + '</div>' +
-    (compact ? '' : '<p class="who">For: ' + s.who.map(function (w) { return ROLES.filter(function (x) { return x.k === w; })[0].n; }).join(', ') + ' · Source framework: ' + esc(s.ac) + '</p>') +
+    (compact ? '' : '<p class="who">For: ' + s.who.map(roleName).join(', ') + ' · Source framework: ' + esc(s.ac) + '</p>') +
     (typeof r.score === 'number' && r.score > 0 ? '<div class="fit" title="Match with the current diagnosis"><i style="width:' + Math.min(100, r.score / 3.2 * 100).toFixed(0) + '%"></i></div>' : '') + '</article>';
 }
 function pageCountry() {
@@ -217,7 +271,7 @@ function pageCountry() {
     card('Where the pressure comes from', pressures(s) + '<p class="note">Each gauge runs from 0 to 100 and is built from the official indicators named on the Data & Method page. <a href="#inflation/diag" data-go="inflation/diag">See the full diagnosis</a>.</p>', { sub: 'Six sources of inflation pressure' }) +
     '</div><div class="grid two">' +
     card('Prices by spending category', barList(div, { unit: '%', ref: s.piDiv, refLabel: 'Overall inflation in ' + periodLabel(s.divT) + ', ' + pct(s.piDiv) }) + '<h3 class="grp" style="margin-top:18px">Also watch</h3><div class="kv one">' + [['Rents', s.rent], ['Electricity, gas and fuels', M.val(D, 'hicpd', 'CP045|' + st.c)], ['Administered prices', s.admin], ['Producer prices', s.ppi], ['House prices', s.hpi]].map(function (r) { return '<div><span>' + r[0] + '</span><b>' + pct(r[1]) + '</b></div>'; }).join('') + '</div>', { sub: 'Annual rate of change, %, ' + periodLabel(s.divT), src: 'hicpd' }) +
-    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="#strategies" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + ROLES.filter(function (x) { return x.k === st.role; })[0].n.toLowerCase() : '') }) +
+    card('Best-matched strategies', '<div class="strats compact">' + recs.map(function (x) { return stratCard(x, true); }).join('') + '</div><p class="note"><a href="#strategies" data-go="strategies">Open the full library of ' + STRATEGIES.length + ' strategies</a></p>', { sub: 'Ranked against this diagnosis' + (st.role !== 'all' ? ' for ' + roleName(st.role).toLowerCase() : '') }) +
     '</div>';
 }
 
@@ -424,7 +478,11 @@ function simOut() {
     }).join('') + '</tbody></table></div>' +
     (r.flags.length ? '<ul class="flags">' + r.flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
     '<details class="law" aria-label="Legal notes" open><summary>EU legal and institutional notes for this package</summary><ul>' + r.rows.map(function (x) { const l = names[x.k]; return '<li><b>' + l.n + '.</b> ' + esc(l.law) + (l.ref && l.ref[1] ? ' <a class="srcl" href="' + esc(l.ref[1]) + '" target="_blank" rel="noopener">Source: ' + esc(l.ref[0]) + '</a>' : '') + actStatus(l.ref ? l.ref[1] : '', '', l.law) + '</li>'; }).join('') +
-    '</ul>' + reviewAge() + '<p class="note">Notes checked against the linked official texts on ' + REVIEWED + '. They summarise the law in general terms and are not legal advice.</p></details>';
+    '</ul>' + reviewAge() + '<p class="note">Notes checked against the linked official texts on ' + REVIEWED + '. ' + actsNote() + ' They summarise the law in general terms and are not legal advice.</p></details>';
+}
+function owner(l) {
+  if (st.role === 'all' || st.role === 'res') return '';
+  return l.who.indexOf(st.role) >= 0 ? ' ' + badge('Yours to decide', 'good') : ' ' + badge('Decided by ' + l.who.map(roleName).join(' or ').toLowerCase(), 'mute');
 }
 function pageSimulator() {
   const s = snap(st.c), groups = {};
@@ -432,7 +490,7 @@ function pageSimulator() {
   const left = Object.keys(groups).map(function (g) {
     return '<h3 class="grp">' + g + '</h3><div class="sliders wide">' + groups[g].map(function (l) {
       const v = st.L[l.k];
-      return '<label><span>' + l.n + '<small id="d-lever-' + l.k + '">' + l.d + '</small></span>' + range(l.k, v, l.min || 0, l.max, l.step, 'lever', leverLabel(l, v), l.n) + '<output aria-hidden="true">' + leverLabel(l, v) + '</output></label>';
+      return '<label><span>' + l.n + owner(l) + '<small id="d-lever-' + l.k + '">' + l.d + '</small></span>' + range(l.k, v, l.min || 0, l.max, l.step, 'lever', leverLabel(l, v), l.n) + '<output aria-hidden="true">' + leverLabel(l, v) + '</output></label>';
     }).join('') + '</div>';
   }).join('');
   return head('Policy Simulator · ' + esc(s.meta.n), 'Combine measures and see their estimated first-year effect on inflation, the budget and growth.') +
@@ -457,7 +515,7 @@ function pageStrategies() {
   return head('Strategy Library', STRATEGIES.length + ' policy and market-design options for price and currency stability. Each EU note links to the official text it rests on, last checked on ' + REVIEWED + '.') +
     '<div class="filters"><label class="fld grow"><span>Search</span><input type="search" id="q" value="' + esc(st.lib.q) + '" placeholder="For example rent, energy, reserves"></label>' +
     '<label class="fld"><span>Category</span><select id="cat"><option value="">All categories</option>' + CATEGORIES.map(function (c) { return '<option' + (st.lib.cat === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></label>' +
-    '<label class="chk"><input type="checkbox" id="fitc"' + (st.lib.fit ? ' checked' : '') + '> Rank by match with ' + esc(nameOf(st.c)) + '</label></div>' + reviewAge() + '<div id="out">' + stratList() + '</div>';
+    '<label class="chk"><input type="checkbox" id="fitc"' + (st.lib.fit ? ' checked' : '') + '> Rank by match with ' + esc(nameOf(st.c)) + '</label></div>' + reviewAge() + '<p class="note" style="margin:0 0 10px">' + actsNote() + '</p><div id="out">' + stratList() + '</div>';
 }
 
 // ---------- Compare ----------
@@ -505,7 +563,7 @@ function pageMethod() {
       return '<tr><td><a href="' + sourceUrl(id) + '" target="_blank" rel="noopener"><b>' + d.label + '</b></a>' + (d.code ? '<br><small>' + d.code + '</small>' : e && e.via ? '<br><small>via ' + esc(e.via) + '</small>' : '') + '</td><td>' + esc(d.src) + '</td><td>' + d.freq + '</td><td>' + (e ? periodLabel(e.t[e.t.length - 1]) : '–') + '</td><td>' + (e ? ago(e.at) : '–') + '</td><td>' + b + '</td></tr>';
     }).join('') + '</tbody></table></div><div class="actions"><button class="btn primary" data-act="refresh">Refresh all now</button><button class="btn" data-act="print">Print or save as PDF</button><button class="btn" data-act="download">Download the data (JSON)</button><button class="btn" data-act="csv">Download ' + esc(nameOf(st.c)) + ' summary (CSV)</button></div>' +
       '<p class="note">Your browser fetches every figure directly from the publisher each time you open the tool and again while it stays open: exchange rates hourly, monthly statistics every six hours. Nothing passes through a private server. When you are offline the tool shows the copy saved on this device.</p>', { sub: ALL_IDS.length + ' official feeds, updated automatically' });
-  } else body = PAGE_METHOD(sub, { VERSION: VERSION + ' · build ' + BUILD, REVIEWED: REVIEWED, STATUS_CHECKED: STATUS_CHECKED, ACTS: Object.keys(STATUS).length, periodLabel: periodLabel, card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
+  } else body = PAGE_METHOD(sub, { VERSION: VERSION + ' · build ' + BUILD, REVIEWED: REVIEWED, ACTS_NOTE: actsNote(), card: card, badge: badge, chart: chart, M: M, standalone: isStandalone() });
   return head('Data & Method', 'Where every number comes from, how the gauges and estimates are built, and how to install the tool.') + subtabs('method') + body;
 }
 
@@ -576,6 +634,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'refresh') refresh(ALL_IDS, true);
   else if (a === 'download') download('eu-stability-compass-data.json', JSON.stringify({ exported: new Date().toISOString(), datasets: D }), 'application/json');
   else if (a === 'csv') download('summary-' + st.c + '.csv', csvSummary(), 'text/csv');
+  else if (a === 'lensoff') { st.role = 'all'; render(true); }
   else if (a === 'install') install();
   else if (a === 'print') window.print();
   else if (a === 'close') closeModal();
@@ -666,11 +725,11 @@ function boot() {
   base.then(function () {
     show(first.p, first.s);
     syncAddr();
-    refresh(CORE_IDS).then(function () { refresh(ALL_IDS); });
+    refresh(CORE_IDS).then(function () { refresh(ALL_IDS); refreshActs(); });
   });
-  setInterval(function () { if (!document.hidden && online) refresh(ALL_IDS); }, 15 * 60000);
+  setInterval(function () { if (!document.hidden && online) { refresh(ALL_IDS); refreshActs(); } }, 15 * 60000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden && online) refresh(ALL_IDS); });
-  window.addEventListener('online', function () { online = true; refresh(ALL_IDS, true); });
+  window.addEventListener('online', function () { online = true; refresh(ALL_IDS, true); refreshActs(); });
   window.addEventListener('offline', function () { online = false; status(); });
 }
 
