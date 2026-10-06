@@ -58,7 +58,7 @@ async function lookup() {
   const next = function () {
     if (window.__escClaim || i >= tiers.length) return;
     const base = tiers[i++];
-    const timer = setTimeout(next, 2000);
+    const timer = setTimeout(next, 1200);
     import(base + 'js/boot.js').then(function (boot) { return boot.run(base); }).then(function () { clearTimeout(timer); }, function () { clearTimeout(timer); next(); });
   };
   next();
