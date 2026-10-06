@@ -5,7 +5,10 @@ import { STRATEGIES, CATEGORIES, ROLES, recommend, applies } from './strategies.
 import { lineChart, spark, barList, meter, fmt, esc, periodLabel } from './charts.js';
 import { PAGE_METHOD } from './method.js';
 
-const VERSION = '1.0.2';
+const BASE = new URL('../', import.meta.url).href;
+const BUILD = (BASE.match(/@([0-9a-f]{7})[0-9a-f]*\//) || [])[1] || 'stored copy';
+const VERSION = '1.1.0 · build ' + BUILD;
+window.__escStarted = true;
 const PAGES = [
   { k: 'overview', n: 'Overview' }, { k: 'country', n: 'Country' }, { k: 'inflation', n: 'Inflation Lab' },
   { k: 'currency', n: 'Currency & Trade' }, { k: 'simulator', n: 'Policy Simulator' }, { k: 'strategies', n: 'Strategies' },
@@ -602,7 +605,7 @@ function refresh(ids, force) {
 function boot() {
   ALL_IDS.forEach(function (id) { const c = LS.get('d.' + id); if (c && c.t && c.s) { D[id] = c; if (!isStale(id, c)) STATE[id] = 'live'; } });
   const missing = ALL_IDS.filter(function (id) { return !D[id]; });
-  const base = missing.length ? fetch('data/snapshot.json').then(function (r) { return r.json(); }).then(function (j) {
+  const base = missing.length ? fetch(BASE + 'data/snapshot.json').then(function (r) { return r.json(); }).then(function (j) {
     missing.forEach(function (id) { if (j.d[id] && !D[id]) D[id] = j.d[id]; });
   }).catch(function () { /* first visit while offline: wait for live data */ }) : Promise.resolve();
   $('csel').innerHTML = '<optgroup label="Member states">' + COUNTRIES.map(function (c) { return '<option value="' + c.c + '">' + c.n + '</option>'; }).join('') + '</optgroup><optgroup label="Aggregates"><option value="EU">European Union</option><option value="EA">Euro area</option></optgroup>';
@@ -649,14 +652,16 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       const w = reg.installing;
       if (!w) return;
       w.addEventListener('statechange', function () {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) {
-          const t = $('toast'); t.innerHTML = 'A new version is ready. <button class="btn" data-act="reload">Update now</button>'; t.hidden = false;
-        }
+        if (w.state === 'installed' && navigator.serviceWorker.controller) announceUpdate();
       });
     });
     setInterval(function () { reg.update().catch(function () { /* offline */ }); }, 60 * 60000);
   }).catch(function () { /* unsupported context */ });
 }
+
+function announceUpdate() { const t = $('toast'); t.innerHTML = 'A new version is ready. <button class="btn" data-act="reload">Update now</button>'; t.hidden = false; }
+window.addEventListener('esc-update', announceUpdate);
+if (window.__escUpdate) announceUpdate();
 
 applyTheme();
 boot();

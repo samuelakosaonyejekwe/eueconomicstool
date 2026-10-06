@@ -14,7 +14,7 @@ const GAUGES = [
 ];
 
 function mirrors(el) {
-  fetch('mirrors.json').then(function (r) { return r.json(); }).then(function (list) {
+  fetch(new URL('../mirrors.json', import.meta.url).href).then(function (r) { return r.json(); }).then(function (list) {
     el.innerHTML = '<ul class="mirrors">' + list.map(function (m, i) {
       return '<li><span><b>' + m.name + '</b><br><a href="' + m.url + '" target="_blank" rel="noopener">' + m.url.replace(/^https:\/\//, '') + '</a></span><span class="badge b-mute" id="mir' + i + '">Checking</span></li>';
     }).join('') + '</ul>';

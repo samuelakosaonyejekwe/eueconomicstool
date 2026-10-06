@@ -14,48 +14,84 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css">
-<link rel="modulepreload" href="js/app.js">
-<link rel="modulepreload" href="js/data.js">
-<link rel="modulepreload" href="js/model.js">
-<link rel="modulepreload" href="js/charts.js">
-<link rel="modulepreload" href="js/countries.js">
-<link rel="modulepreload" href="js/strategies.js">
-<link rel="modulepreload" href="js/method.js">
-<link rel="preconnect" href="https://ec.europa.eu" crossorigin>
+<style>
+html{background:#f3f5fa}@media (prefers-color-scheme:dark){html{background:#0c0f15;color:#f4f6fa}}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+#boot{text-align:center;padding:28vh 20px 0;opacity:.8}
+#boot i{display:block;width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid rgba(128,140,170,.35);border-top-color:#1b4dc0;animation:bsp 1s linear infinite}
+@keyframes bsp{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
-<a class="skip" href="#app">Skip to content</a>
-<header class="top">
-  <div class="wrap bar">
-    <a class="brand" href="./" data-go="overview" aria-label="EU Stability Compass, overview">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#143a8f"/><path d="M50.4 18.2A23 23 0 1 1 36.8 9.5" fill="none" stroke="#f2b705" stroke-width="3" stroke-linecap="round"/><circle cx="46.5" cy="12.6" r="3.2" fill="#fff"/><path fill="#fff" d="M19 34.6h6V45h-6zM28 27h6v18h-6zM37 19.4h6V45h-6z"/></svg>
-      <span><b>EU Stability Compass</b><small>Economic decision support for the 27 member states</small></span>
-    </a>
-    <div class="tools">
-      <span id="status" class="status s-info" role="status">Starting…</span>
-      <button id="install" class="btn gold" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Install app</button>
-      <button id="theme" class="btn ghost" type="button" aria-label="Switch between light and dark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor"/></svg></button>
-    </div>
-  </div>
-  <div class="wrap ctx">
-    <label><span>Country</span><select id="csel" aria-label="Country"></select></label>
-    <label><span>Viewpoint</span><select id="rsel" aria-label="Viewpoint"></select></label>
-  </div>
-</header>
-<nav id="nav" class="tabs" aria-label="Pages"></nav>
-<main id="app" class="wrap" tabindex="-1">
-  <div class="loading"><div class="spin"></div><p>Opening EU Stability Compass…</p></div>
-</main>
-<footer class="foot wrap">
-  <p>Independent tool, not affiliated with the European Union or the European Central Bank. Statistics: Eurostat and ECB open data. Estimates are illustrative; see <a href="./" data-go="method/how">Data &amp; Method</a>.</p>
-  <p>© 2026 Samuel Akosa Onyejekwe</p>
-</footer>
-<nav id="pager" class="pager" aria-label="Previous and next page"></nav>
-<div id="modal" class="modal" hidden></div>
-<div id="toast" class="toast" role="status" hidden></div>
+<div id="root"><div id="boot"><i></i>Opening EU Stability Compass…</div></div>
 <noscript><p style="padding:24px;font:16px system-ui">EU Stability Compass needs JavaScript to fetch and chart live statistics. Please enable it and reload.</p></noscript>
-<script type="module" src="js/app.js"></script>
-<script nomodule>document.getElementById('app').innerHTML='<div class="card"><div class="cb"><p>This browser is too old to run the tool. Please update it, or open the page in a current version of Chrome, Edge, Firefox or Safari.</p></div></div>';</script>
+<script type="module">
+// Loader. Finds the newest published commit of the tool and runs exactly that
+// version from a content delivery network, so every change to the repository
+// goes live by itself. If the network or the lookup is unavailable it runs the
+// copy stored with this page instead.
+const REPO = 'samuelakosaonyejekwe/eueconomicstool';
+const CDN = 'https://cdn.jsdelivr.net/gh/' + REPO + '@';
+const KEY = 'esc.rev';
+const dev = /^(localhost|127\.|\[::1\])/.test(location.hostname) || location.protocol === 'file:';
+let rev = null;
+try { rev = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* storage blocked */ }
+if (!rev || !/^[0-9a-f]{40}$/.test(rev.sha || '')) rev = null;
+const running = rev ? rev.sha : '';
+
+function store() { try { localStorage.setItem(KEY, JSON.stringify(rev)); } catch (e) { /* storage blocked */ } }
+function style(base) {
+  return new Promise(function (done) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = base + 'css/app.css';
+    l.onload = function () { done(l); };
+    l.onerror = function () { l.remove(); done(null); };
+    setTimeout(function () { if (!l.sheet) { l.remove(); done(null); } }, 6000);
+    document.head.appendChild(l);
+  });
+}
+async function start(base) {
+  if (!(await style(base))) throw new Error('stylesheet unavailable');
+  const frame = await import(base + 'js/shell.js');
+  document.getElementById('root').innerHTML = frame.SHELL;
+  await import(base + 'js/app.js');
+}
+async function check() {
+  if (dev || (rev && Date.now() - rev.at < 5 * 60000)) return;
+  try {
+    const headers = { Accept: 'application/vnd.github.sha' };
+    if (rev && rev.etag) headers['If-None-Match'] = rev.etag;
+    const r = await fetch('https://api.github.com/repos/' + REPO + '/commits/main', { headers: headers, cache: 'no-store' });
+    if (r.status === 304 && rev) { rev.at = Date.now(); store(); return; }
+    if (!r.ok) return;
+    const sha = (await r.text()).trim();
+    if (!/^[0-9a-f]{40}$/.test(sha)) return;
+    rev = { sha: sha, etag: r.headers.get('ETag') || '', at: Date.now() };
+    store();
+    if (running && sha !== running) {
+      // Fetch the new version now so it is ready, also offline, on the next start.
+      ['js/app.js', 'js/shell.js'].forEach(function (f) { const l = document.createElement('link'); l.rel = 'modulepreload'; l.href = CDN + sha + '/' + f; document.head.appendChild(l); });
+      fetch(CDN + sha + '/css/app.css').catch(function () {});
+      window.__escUpdate = true;
+      window.dispatchEvent(new Event('esc-update'));
+    }
+  } catch (e) { /* offline or rate-limited: keep the current version */ }
+}
+(async function () {
+  if (!rev && !dev) await Promise.race([check(), new Promise(function (r) { setTimeout(r, 3000); })]);
+  const sha = rev ? rev.sha : '';
+  try {
+    if (!sha || dev) throw new Error('use the stored copy');
+    await start(CDN + sha + '/');
+  } catch (e) {
+    if (!document.getElementById('app') || !window.__escStarted) await start('./');
+  }
+  if (sha && 'serviceWorker' in navigator) navigator.serviceWorker.ready.then(function (reg) { if (reg.active) reg.active.postMessage({ rev: sha }); }).catch(function () {});
+  check();
+  setInterval(check, 10 * 60000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();
+</script>
+<script nomodule>document.getElementById('root').innerHTML='<p style="padding:24px;font:16px system-ui">This browser is too old to run the tool. Please update it, or open the page in a current version of Chrome, Edge, Firefox or Safari.</p>';</script>
 </body>
 </html>
